@@ -1,0 +1,141 @@
+CVSS v4.0 Base Metric Scoring Rubrics
+=====================================
+
+Transcribed verbatim from the CVSS v4.0 User Guide, "Scoring Rubrics" section
+(the decision-tree graphics near the end of the document).
+Source: https://www.first.org/cvss/v4.0/user-guide
+
+Per FIRST: "The scoring rubrics are an aid to scoring vulnerabilities by
+supplementing the metric definitions in the Specification Document."
+
+The User Guide provides eight rubrics, one per Base metric (AV, AC, AT, PR, UI,
+VC, VI, VA). There is no separate rubric for the Subsequent System impact
+metrics (SC, SI, SA): apply the Confidentiality / Integrity / Availability
+impact rubrics to the subsequent (downstream) system instead of the vulnerable
+one.
+
+Each rubric below is the original yes/no decision tree rendered as text. Value
+descriptions are the exact wording from the graphic.
+
+
+-------------------------------------------------------------------------------
+Attack Vector (AV)
+-------------------------------------------------------------------------------
+Q1. Does the attacker exploit the vulnerable component via the network stack?
+    YES -> Q2. Must the vulnerability be exploited from a network logically
+               adjacent to the target?
+               NO  -> Network (N)
+                      Vulnerability is exploited from a remote network, e.g.,
+                      across the Internet.
+               YES -> Adjacent (A)
+                      Attack is limited at the protocol level to a logically
+                      adjacent topology, e.g., Bluetooth or Wi-Fi.
+    NO  -> Q3. Does the attacker require physical access to the target?
+               NO  -> Local (L)
+                      Attack is committed through a local application
+                      vulnerability, or the attack is able to log in locally.
+               YES -> Physical (P)
+                      Attacker requires physical access to the vulnerable
+                      component.
+
+
+-------------------------------------------------------------------------------
+Attack Complexity (AC)
+-------------------------------------------------------------------------------
+Q1. Can the attacker exploit the vulnerability at will?
+    YES -> Low (L)
+           Attacker can reliably exploit the vulnerability at any time.
+    NO  -> High (H)
+           An attack will always fail unless built-in security-enhancing
+           controls are overcome.
+
+
+-------------------------------------------------------------------------------
+Attack Requirements (AT)
+-------------------------------------------------------------------------------
+Q1. Does a successful attack depend on specific execution conditions?
+    YES -> Present (P)
+           A successful attack will be more difficult unless specific, external
+           conditions are met.
+    NO  -> None (N)
+           The attacker can exploit the vulnerability under all or most
+           instances of the vulnerability.
+
+
+-------------------------------------------------------------------------------
+Privileges Required (PR)
+-------------------------------------------------------------------------------
+Q1. Must the attacker be authorized to the vulnerable component prior to the
+    attack?
+    NO  -> None (N)
+           An unauthorized attacker.
+    YES -> Q2. Are administrator privileges required?
+               NO  -> Low (L)
+                      User access required.
+               YES -> High (H)
+                      Administrator or system level access required.
+
+
+-------------------------------------------------------------------------------
+User Interaction (UI)
+-------------------------------------------------------------------------------
+Q1. Does the attacker require some other user to perform an attack?
+    NO  -> None (N)
+           Attack can be accomplished with no user interaction.
+    YES -> Q2. Does the other user need to be an active participant?
+               NO  -> Passive (P)
+                      Successful exploitation of this vulnerability requires
+                      limited interaction by the targeted user.
+               YES -> Active (A)
+                      Successful exploitation of this vulnerability requires a
+                      targeted user to perform specific interactions.
+
+
+-------------------------------------------------------------------------------
+Confidentiality Impact (VC)   [apply to the subsequent system for SC]
+-------------------------------------------------------------------------------
+Q1. Is there any impact on confidentiality?
+    YES -> Q2. Can the attacker obtain all information from the impacted
+               component or is the disclosed information critical?
+               YES -> High (H)
+                      All information is disclosed to the attacker, or some
+                      critical information is disclosed.
+               NO  -> Low (L)
+                      Some information can be obtained, and/or the attacker does
+                      not have control over the kind of degree.
+    NO  -> None (N)
+           No information is disclosed.
+
+
+-------------------------------------------------------------------------------
+Integrity Impact (VI)   [apply to the subsequent system for SI]
+-------------------------------------------------------------------------------
+Q1. Is there any impact on integrity?
+    YES -> Q2. Can the attacker modify all the information of the impacted
+               component, or is the modified information critical?
+               YES -> High (H)
+                      The attacker can modify any non-critical information, or
+                      some critical information.
+               NO  -> Low (L)
+                      Some information can be modified, and/or the attacker does
+                      not have control over the kind or degree.
+    NO  -> None (N)
+           No integrity loss.
+
+
+-------------------------------------------------------------------------------
+Availability Impact (VA)   [apply to the subsequent system for SA]
+-------------------------------------------------------------------------------
+Q1. Is there any impact on the availability of a resource?
+    YES -> Q2. Can the attacker completely deny access to the affected
+               component, or is the resource critical?
+               YES -> High (H)
+                      The affected resource is completely unavailable.
+                      Alternatively, the attacker has the ability to deny some
+                      availability, but the loss of availability presents a
+                      direct, serious consequence to the Vulnerable System.
+               NO  -> Low (L)
+                      The affected resource is non-critical, but suffers reduced
+                      performance or intermittent operation.
+    NO  -> None (N)
+           No availability impact.

@@ -1,0 +1,19 @@
+# Binaries
+/concord
+/bin/
+/dist/
+*.exe
+
+# Go
+*.test
+*.out
+vendor/
+
+# Local
+*.log
+.env
+triage-output*/
+rerun-*/
+plans/
+*.tar.gz
+.DS_Store

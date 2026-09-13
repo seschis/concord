@@ -1,0 +1,35 @@
+version: 2
+project_name: concord
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: concord
+    main: ./cmd/concord
+    binary: concord
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: seschis
+    name: concord
