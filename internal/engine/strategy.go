@@ -83,7 +83,7 @@ func NewStrategy(name string, gatherer ContextGatherer) (Strategy, error) {
 	switch name {
 	case "", "shared":
 		return SharedContext{Gatherer: gatherer}, nil
-	case "per-model", "quad":
+	case "per-model":
 		return PerModelAgent{}, nil
 	default:
 		return nil, fmt.Errorf("unknown context strategy %q (want shared|per-model)", name)

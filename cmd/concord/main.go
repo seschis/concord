@@ -128,7 +128,7 @@ func main() {
 }
 
 func run(ctx context.Context, cfg *config, input string) error {
-	if cfg.contextStrategy != "shared" && cfg.contextStrategy != "per-model" && cfg.contextStrategy != "quad" {
+	if cfg.contextStrategy != "shared" && cfg.contextStrategy != "per-model" {
 		return fmt.Errorf("unknown context strategy %q (want shared|per-model)", cfg.contextStrategy)
 	}
 	if cfg.srcRoot != "" {

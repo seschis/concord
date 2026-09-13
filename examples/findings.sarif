@@ -1,0 +1,77 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "concord-example-scanner",
+          "rules": [
+            {
+              "id": "go:command-injection",
+              "name": "Command injection",
+              "shortDescription": {
+                "text": "Untrusted input reaches a shell command"
+              },
+              "properties": {
+                "tags": ["CWE-78"],
+                "security-severity": "9.8"
+              }
+            },
+            {
+              "id": "go:sql-injection",
+              "name": "SQL injection",
+              "shortDescription": {
+                "text": "Untrusted input is interpolated into a SQL query"
+              },
+              "properties": {
+                "tags": ["CWE-89"],
+                "security-severity": "9.8"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "go:command-injection",
+          "level": "error",
+          "message": {
+            "text": "User-controlled ?host= is concatenated into a shell command passed to sh -c, allowing arbitrary command execution."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "main.go"
+                },
+                "region": {
+                  "startLine": 30
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "go:sql-injection",
+          "level": "warning",
+          "message": {
+            "text": "User-controlled ?ids= is interpolated into a SQL query without parameterization."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "users.go"
+                },
+                "region": {
+                  "startLine": 22
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
