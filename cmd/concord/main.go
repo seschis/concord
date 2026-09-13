@@ -1,6 +1,6 @@
 // Command concord is an experimental multi-model security finding triage
-// tool: ingest -> context strategy -> quad-model vote -> adjudication -> JSON
-// output. Reads and writes local files only.
+// tool: ingest -> context strategy -> multi-model vote -> judge-panel
+// adjudication of ties -> JSON output. Reads and writes local files only.
 package main
 
 import (
@@ -47,6 +47,11 @@ type config struct {
 	noGemini bool
 	noCodex  bool
 	noAzure  bool
+
+	// judges are the adjudication panel: each is a persona (built-in focus or a
+	// custom prompt file) on a model. judgeModels overrides a judge's model.
+	judges      []string // --judge: "name" or "name=/path/prompt.md" (repeatable)
+	judgeModels []string // --judge-model: "name=claude|gemini|codex|azure" (repeatable)
 
 	maxTokens       int
 	outputDir       string
@@ -101,6 +106,11 @@ func main() {
 	f.BoolVar(&cfg.noGemini, "no-gemini", false, "skip Gemini")
 	f.BoolVar(&cfg.noCodex, "no-codex", false, "skip Codex")
 	f.BoolVar(&cfg.noAzure, "no-azure", false, "skip Azure")
+
+	f.StringArrayVar(&cfg.judges, "judge", nil,
+		"adjudication panel: a judge persona. Built-in names: adjudicator | strict | business | codeflow, or 'name=/path/prompt.md' to supply your own focus file (the JSON output contract is appended automatically). Repeatable. Every judge defaults to the preferred model (override with --judge-model), so a single-model run still yields a diverse panel")
+	f.StringArrayVar(&cfg.judgeModels, "judge-model", nil,
+		"override a judge's model: 'name=claude|gemini|codex|azure' (repeatable); a judge without this uses the default preferred model")
 
 	f.IntVar(&cfg.maxTokens, "max-tokens", 16000, "max tokens per model call")
 	f.StringVarP(&cfg.outputDir, "output-dir", "o", "./triage-output", "output directory")
@@ -188,15 +198,14 @@ func run(ctx context.Context, cfg *config, input string) error {
 	// non-TTY stdout (pipe, redirect, CI) always gets plain line output.
 	useTUI := !cfg.plain && term.IsTerminal(int(os.Stdout.Fd()))
 
-	// The gatherer (shared strategy) and adjudicator prefer Claude, else the
-	// first available voter. Every provider is an *LLMProvider, so both roles
-	// are satisfied.
+	// The gatherer (shared strategy) prefers Claude, else the first available
+	// voter. Every provider is an *LLMProvider, so the role is satisfied.
 	var gatherer engine.ContextGatherer = claude
-	var adjudicator engine.Adjudicator = claude
 	if claude == nil {
 		gatherer = voters[0].(engine.ContextGatherer)
-		adjudicator = voters[0].(engine.Adjudicator)
 	}
+
+	judges, judgeNames := buildJudges(voters, cfg)
 
 	strategy, err := engine.NewStrategy(cfg.contextStrategy, gatherer)
 	if err != nil {
@@ -216,6 +225,11 @@ func run(ctx context.Context, cfg *config, input string) error {
 		if len(contextRoots) > 0 {
 			fmt.Printf("Architecture context: %s\n", strings.Join(contextRootLabels(contextRoots), ", "))
 		}
+		if len(judgeNames) > 1 {
+			fmt.Printf("Judge panel: %s\n", strings.Join(judgeNames, ", "))
+		} else {
+			fmt.Printf("Judge: %s\n", judgeNames[0])
+		}
 	}
 
 	if !cfg.noTranscripts {
@@ -229,7 +243,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 	eng := &engine.Engine{
 		Voters:       voters,
 		Strategy:     strategy,
-		Adjudicator:  adjudicator,
+		Judges:       judges,
 		SrcRoot:      cfg.srcRoot,
 		ContextRoots: contextRoots,
 		Effort:       cfg.effort,
@@ -280,6 +294,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 		ContextGuides:   discoveredGuides(cfg, contextRoots),
 		Effort:          cfg.effort,
 		Models:          names,
+		Judges:          judgeNames,
 		Total:           len(findings),
 		TotalCostUSD:    cost,
 	}
@@ -345,6 +360,85 @@ func resolveProviders(ctx context.Context, cfg *config) ([]provider.Provider, *p
 		add(p, "Azure", err)
 	}
 	return voters, claude, names
+}
+
+// buildJudges assembles the adjudication panel from the --judge / --judge-model
+// flags. Each judge is a persona (a built-in focus or a custom prompt file) on a
+// model. Every judge defaults to the preferred model (voters[0] — Claude if
+// present, else the first available), so a single-model run still gets a diverse
+// panel; --judge-model overrides a judge's model. With no --judge flags the panel
+// is a single default judge named "adjudicator" (the legacy behavior). It returns
+// the panel and the judge names (for the banner and report metadata).
+func buildJudges(voters []provider.Provider, cfg *config) ([]engine.Judge, []string) {
+	if len(voters) == 0 {
+		return nil, nil
+	}
+	defaultModel := voters[0].(*provider.LLMProvider)
+
+	modelByName := func(name string) (*provider.LLMProvider, bool) {
+		for _, v := range voters {
+			if v.Name() == name {
+				return v.(*provider.LLMProvider), true
+			}
+		}
+		return nil, false
+	}
+
+	models := map[string]string{}
+	for _, spec := range cfg.judgeModels {
+		if name, model := splitSpec(spec); name != "" {
+			models[name] = model
+		}
+	}
+
+	var judges []engine.Judge
+	var names []string
+	for _, spec := range cfg.judges {
+		name, file := splitSpec(spec)
+		if name == "" {
+			name = "judge"
+		}
+		var system string
+		if file != "" {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				fmt.Printf("  skipping judge %q: %s\n", name, short(err.Error()))
+				continue
+			}
+			system = triage.BuildJudgeSystemPrompt(string(data))
+		} else {
+			focus, ok := triage.FocusFor(name)
+			if !ok {
+				fmt.Printf("  skipping judge %q: unknown persona (built-in: %s) or use name=/path/prompt.md\n",
+					name, strings.Join(triage.BuiltInPersonaNames(), ", "))
+				continue
+			}
+			system = triage.BuildJudgeSystemPrompt(focus)
+		}
+		model := defaultModel
+		if m, ok := models[name]; ok {
+			if pm, ok := modelByName(m); ok {
+				model = pm
+			} else {
+				fmt.Printf("  warning: judge %q model %q unavailable; using default\n", name, m)
+			}
+		}
+		judges = append(judges, provider.NewJudge(name, model, system))
+		names = append(names, name)
+	}
+
+	if len(judges) == 0 {
+		judges = []engine.Judge{provider.NewJudge("adjudicator", defaultModel, triage.AdjudicationSystemPrompt)}
+		names = []string{"adjudicator"}
+	}
+	return judges, names
+}
+
+// splitSpec splits a "name=value" judge spec on the first '='. No '=' (or an empty
+// value) yields an empty value — e.g. a bare built-in persona name.
+func splitSpec(spec string) (string, string) {
+	name, value, _ := strings.Cut(spec, "=")
+	return strings.TrimSpace(name), strings.TrimSpace(value)
 }
 
 // buildContextRoots validates each --context-dir and turns it into a labeled

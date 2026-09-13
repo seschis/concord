@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"github.com/seschis/concord/internal/agent"
 	"github.com/seschis/concord/internal/finding"
@@ -11,16 +12,20 @@ import (
 	"github.com/seschis/concord/internal/triage"
 )
 
-// Adjudicator resolves a full disagreement between voters.
-type Adjudicator interface {
+// Judge resolves a full disagreement between voters. A panel of judges each
+// carries its own persona (a focus/personality system prompt) and may run on the
+// same or different models, so diversity comes from the agent, not just the model.
+type Judge interface {
+	Name() string
+	Model() string
 	Adjudicate(ctx context.Context, f finding.Finding, results []triage.Result, effort string) (triage.AdjudicationResult, error)
 }
 
-// Engine ties together the voters, the context strategy, and the adjudicator.
+// Engine ties together the voters, the context strategy, and the judge panel.
 type Engine struct {
 	Voters       []provider.Provider
 	Strategy     Strategy
-	Adjudicator  Adjudicator
+	Judges       []Judge
 	SrcRoot      string
 	ContextRoots []agent.Root
 	Effort       string
@@ -41,21 +46,47 @@ func (e *Engine) TriageOne(ctx context.Context, f finding.Finding) (report.Findi
 
 	final, agreement := Vote(run.Results)
 
-	var adj *triage.AdjudicationResult
-	if agreement == "none" && e.Adjudicator != nil {
-		a, err := e.Adjudicator.Adjudicate(ctx, f, run.Results, e.Effort)
-		if err == nil {
-			final = a.FinalVerdict
+	var adjudications []triage.AdjudicationResult
+	if agreement == "none" && len(e.Judges) > 0 {
+		adjudications = e.runJudges(ctx, f, run.Results)
+		for _, a := range adjudications {
 			cost += a.CostUSD
-			adj = &a
 		}
+		final, _ = VoteJudges(adjudications)
 	}
 
 	resultsMap := make(map[string]triage.Result, len(run.Results))
 	for _, r := range run.Results {
 		resultsMap[r.Provider] = r
 	}
-	return report.NewFindingResult(f, resultsMap, final, agreement, adj, run.ExtraCost), cost
+	return report.NewFindingResult(f, resultsMap, final, agreement, adjudications, run.ExtraCost), cost
+}
+
+// runJudges runs every judge on the disagreement concurrently and returns their
+// results in panel order, each stamped with its judge name and model. A judge's
+// failure surfaces inside its AdjudicationResult (Error / NEEDS_MORE_CONTEXT),
+// never as a panic, so one judge dropping out does not abort the finding.
+func (e *Engine) runJudges(ctx context.Context, f finding.Finding, results []triage.Result) []triage.AdjudicationResult {
+	out := make([]triage.AdjudicationResult, len(e.Judges))
+	var wg sync.WaitGroup
+	for i, j := range e.Judges {
+		wg.Add(1)
+		go func(i int, j Judge) {
+			defer wg.Done()
+			a, _ := j.Adjudicate(ctx, f, results, e.Effort)
+			// An errored judge (API error / empty response) yields no verdict;
+			// normalize it to NEEDS_MORE_CONTEXT so it counts as "unknown" and can
+			// never leak an empty verdict into the panel vote or the final result.
+			if a.FinalVerdict == "" {
+				a.FinalVerdict = triage.NeedsMoreContext
+			}
+			a.Judge = j.Name()
+			a.Model = j.Model()
+			out[i] = a
+		}(i, j)
+	}
+	wg.Wait()
+	return out
 }
 
 // TriageAll processes every finding sequentially (voters within a finding run
@@ -83,7 +114,7 @@ func (e *Engine) TriageAll(ctx context.Context, findings []finding.Finding, prog
 		out = append(out, fr)
 
 		agreement := fr.Agreement
-		if fr.Adjudication != nil {
+		if len(fr.Adjudications) > 0 {
 			agreement = "adjudicated"
 		}
 		cvssScore := 0.0
@@ -99,7 +130,7 @@ func (e *Engine) TriageAll(ctx context.Context, findings []finding.Finding, prog
 		})
 
 		if prog != nil {
-			prog(i, f, resultsFromRow(fr), triage.Verdict(fr.FinalVerdict), fr.Agreement, fr.Adjudication != nil)
+			prog(i, f, resultsFromRow(fr), triage.Verdict(fr.FinalVerdict), fr.Agreement, len(fr.Adjudications) > 0)
 		}
 	}
 

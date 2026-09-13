@@ -157,6 +157,33 @@ func TestViewRenders(t *testing.T) {
 	}
 }
 
+// TestApplyJudgePanelRows verifies each adjudicator-panel judge gets its own row
+// labeled by its provider name, in first-seen order.
+func TestApplyJudgePanelRows(t *testing.T) {
+	m := NewModel(Header{}, nil, time.Now())
+	m.apply(prog.Event{Kind: prog.FindingStart, FindingID: "F1"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "strict", Role: prog.RoleAdjudicator, Verdict: "UNLIKELY"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "business", Role: prog.RoleAdjudicator, Verdict: "LIKELY_REAL"})
+	if len(m.rows) != 2 {
+		t.Fatalf("rows = %d, want 2: %+v", len(m.rows), m.rows)
+	}
+	if m.rows[0].label != "strict" || m.rows[0].verdict != "UNLIKELY" {
+		t.Fatalf("strict row wrong: %+v", *m.rows[0])
+	}
+	if m.rows[1].label != "business" || m.rows[1].verdict != "LIKELY_REAL" {
+		t.Fatalf("business row wrong: %+v", *m.rows[1])
+	}
+
+	m2 := NewModel(Header{}, nil, time.Now())
+	m2.apply(prog.Event{Kind: prog.ModelDone, Provider: "adjudicator", Role: prog.RoleAdjudicator, Verdict: "UNLIKELY"})
+	if len(m2.rows) != 1 {
+		t.Fatalf("default rows = %d, want 1: %+v", len(m2.rows), m2.rows)
+	}
+	if m2.rows[0].label != "adjudicator" {
+		t.Fatalf("default row label = %q, want adjudicator", m2.rows[0].label)
+	}
+}
+
 // TestFindingStartResetsRows verifies a new finding clears the prior finding's
 // per-model rows so stale state never bleeds across findings.
 func TestFindingStartResetsRows(t *testing.T) {

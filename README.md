@@ -8,8 +8,9 @@
 `concord` is a Go CLI that triages security scanner findings with multiple LLMs.
 It ingests scanner output (SARIF, JSON, CSV, Markdown, XLSX), lets the models
 read the flagged source with sandboxed file tools, asks up to four models to
-judge each finding independently, takes a majority vote, and adjudicates ties
-by having Claude review every analysis.
+judge each finding independently, takes a majority vote, and breaks ties with a
+panel of judges (persona-driven reviewers whose verdicts are combined by the
+same majority vote).
 
 It reads and writes local files only. No backend, no LLM proxy, no telemetry.
 
@@ -25,7 +26,7 @@ flowchart TD
     E --> F
     F --> G{"Majority vote"}
     G -->|"category agreed"| H["Most conservative agreed verdict stands"]
-    G -->|"tie"| I["Adjudicator reviews every analysis<br/>and issues the deciding factor"]
+    G -->|"tie"| I["Judge panel reviews every analysis<br/>verdicts combined by the same vote"]
     H --> J["results.json + report.md<br/>+ per-finding transcripts"]
     I --> J
 ```
@@ -42,14 +43,17 @@ ensemble problem instead:
   the most conservative verdict in that category stands: when the vote splits,
   the finding is treated as more real, never as safe (`CONFIRMED_REAL` over
   `LIKELY_REAL`, `UNLIKELY` over `NOT_EXPLOITABLE`).
-- If the vote ties, Claude (or the first available model) reviews every
-  analysis and issues a final verdict with the deciding factor.
-- A model that fails or times out drops out of the vote rather than aborting
-  the finding.
+- If the vote ties, a **judge panel** convenes. Each judge is a persona (a
+  focus/personality lens) on a model — several judges can even run on one model
+  and still disagree usefully — and the panel's verdicts are combined with the
+  same majority vote to produce the final verdict and the deciding factor.
+- A model or judge that fails or times out drops out of its vote rather than
+  aborting the finding.
 
 ## What it does
 
-- Four-model triage with a majority vote and Claude-preferred adjudication.
+- Four-model triage with a majority vote and a persona-driven judge panel that
+  breaks ties.
 - On-demand, tool-calling source reading, sandboxed to `--srcroot`.
 - Two context strategies via `--context-strategy`: `shared` (one explorer
   reads the repo, all voters share the brief, cheaper) and `per-model` (each
@@ -181,6 +185,34 @@ concord --srcroot examples/sample-app -o ./demo-out --effort low examples/findin
 
 Run `concord --help` for all flags.
 
+## Breaking ties (`--judge`)
+
+When the voters tie, a **judge panel** breaks it. A judge is a persona — a
+focus/personality lens (e.g. a strict security reviewer vs. a business-impact
+reviewer) — running on a model. Because the persona is the primary axis of
+diversity, you can run several judges on the *same* model and still get useful
+disagreement, which matters when you only have credentials for one LLM.
+
+All judges default to the preferred model; `--judge-model` pins a specific one.
+Built-in personas are `adjudicator`, `strict`, `business`, and `codeflow`; pass
+`name=/path/prompt.md` to add your own focus file. The panel's verdicts are
+combined with the same category-majority + conservative-tiebreak vote used for
+the voters.
+
+```bash
+# Three personas, all on the default (preferred) model
+concord --judge strict --judge business --judge codeflow -o ./out findings.sarif
+
+# Mix models: business review on Gemini, the rest on the default
+concord --judge strict --judge business --judge-model business=gemini -o ./out findings.sarif
+
+# A custom persona from a file
+concord --judge skeptic=./personas/skeptic.md -o ./out findings.sarif
+```
+
+With no `--judge` flags the panel is a single `adjudicator` judge (the legacy
+adjudication prompt), so default behavior is unchanged.
+
 ## Extra architecture context (`--context-dir`)
 
 `--srcroot` lets the models read the finding's own repo. But whether a finding
@@ -270,9 +302,9 @@ role). A region is required. The model is a Bedrock/inference-profile ID via
 ## Status
 
 Experimental. Everything in the [design](DESIGN.md) is implemented: ingest for
-all five formats, the agentic tool loop, the quad-model vote and adjudication,
-both report writers, context bundles, and goreleaser publishing to GitHub
-releases. Known gap: Gemini's `thinking_budget` is passed to langchaingo
+all five formats, the agentic tool loop, the quad-model vote and
+judge-panel tie-breaking, both report writers, context bundles, and goreleaser
+publishing to GitHub releases. Known gap: Gemini's `thinking_budget` is passed to langchaingo
 v0.1.14 but not honored by it (see [DESIGN.md](DESIGN.md)).
 
 ## License

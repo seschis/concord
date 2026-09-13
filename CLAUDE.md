@@ -7,7 +7,9 @@ architecture; this file captures the non-obvious things that will trip you up.
 
 An experimental Go tool that triages security scanner findings with up to four
 LLMs (Claude, Gemini, Codex/direct-OpenAI, Azure OpenAI), takes a majority
-vote, and adjudicates ties.
+vote, and breaks ties with a **judge panel** (several persona-driven judges,
+often on the same model, whose verdicts are combined by the same
+category-majority vote — see the note under *Common changes*).
 
 Hard constraints, do not violate these.
 
@@ -199,6 +201,25 @@ swallowed — it must never break a triage run.
 - **Verdict to classification** lives in `triage.Classification`
   (REAL -> TRUE_POSITIVE, UNLIKELY/NOT_EXPLOITABLE -> FALSE_POSITIVE,
   NEEDS_MORE_CONTEXT -> UNKNOWN).
+
+- **Judge panel (tie-breaking).** When the voters tie, `engine.runJudges` runs
+  each `engine.Judge` concurrently and combines their verdicts with
+  `engine.VoteJudges` (same category-majority + conservative tiebreak as the
+  voters, via the shared `voteCore`). A judge = a persona (focus/personality
+  system prompt) on a model; the persona is the diversity axis, so several
+  judges on ONE model still disagree usefully. Built-in personas live in
+  `triage/judges.go` (`personas` map + `adjudicationContract`, which is always
+  appended so every judge emits the same JSON schema); add a persona by adding a
+  map entry there. `--judge name|name=/path.md` and `--judge-model name=provider`
+  (both repeatable) are parsed by `buildJudges`/`splitSpec` in
+  `cmd/concord/main.go`. No `--judge` → a single `adjudicator` judge using
+  `triage.AdjudicationSystemPrompt` on the preferred model (legacy behavior).
+  Each judge is a single-shot call through
+  `(*provider.LLMProvider).AdjudicateAs` (label/system overridable); a failed
+  judge is normalized to `NEEDS_MORE_CONTEXT` in `runJudges` so it can never
+  leak an empty verdict. Per-finding results carry `adjudications []triage.
+  AdjudicationResult` (each with `Judge`/`Model`); `report.Meta.Judges` lists
+  the panel; the TUI gives each judge its own row.
 
 ## Conventions
 

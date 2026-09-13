@@ -237,8 +237,6 @@ func (m *Model) row(provider, role string) *modelRow {
 	switch role {
 	case prog.RoleExplorer:
 		label = "explorer"
-	case prog.RoleAdjudicator:
-		label = "adjudicator"
 	}
 	r := &modelRow{label: label, role: role}
 	m.rowIdx[key] = len(m.rows)

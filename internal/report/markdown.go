@@ -123,10 +123,17 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 		}
 		b.WriteString("\n")
 
-		if r.Adjudication != nil {
-			fmt.Fprintf(&b, "**Adjudication:** %s\n\n", r.Adjudication.Reasoning)
-			if r.Adjudication.KeyDecidingFactor != "" {
-				fmt.Fprintf(&b, "_Key deciding factor:_ %s\n\n", r.Adjudication.KeyDecidingFactor)
+		for _, j := range r.Adjudications {
+			fmt.Fprintf(&b, "**Judge %s (%s):** verdict %s", j.Judge, j.Model, j.FinalVerdict)
+			switch {
+			case j.Error != "":
+				fmt.Fprintf(&b, " — _error: %s_", j.Error)
+			case j.Reasoning != "":
+				fmt.Fprintf(&b, " — %s", j.Reasoning)
+			}
+			b.WriteString("\n\n")
+			if j.KeyDecidingFactor != "" {
+				fmt.Fprintf(&b, "_Key deciding factor:_ %s\n\n", j.KeyDecidingFactor)
 			}
 		}
 		b.WriteString("---\n\n")

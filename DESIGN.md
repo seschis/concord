@@ -290,19 +290,33 @@ unknown categories for agreement detection.
 
 - If two or more voters agree on category, the most conservative agreed verdict
   stands.
-- If all voters disagree, Claude adjudicates by reviewing every analysis and
-  produces a final verdict with the deciding factor.
-- Per-model failures are tolerated. A failed model drops out of the vote rather
-  than aborting the finding.
+- If the voters tie, a **judge panel** convenes. Each judge is a persona (a
+  focus/personality system prompt) on a model; the persona is the primary axis of
+  diversity, so a panel of several judges on the SAME model still disagrees in
+  useful ways. All judges default to the preferred model and can be overridden
+  per judge (`--judge-model`). The panel runs concurrently and its verdicts are
+  combined with the same category-majority + conservative-tiebreak logic as the
+  voters (`VoteJudges`), producing the final verdict and the deciding factor.
+  A single default judge (`adjudicator`, the legacy prompt) preserves the old
+  behavior when no `--judge` flags are given.
+- Per-model and per-judge failures are tolerated. A failed voter or judge drops
+  out of its vote (normalized to `NEEDS_MORE_CONTEXT`) rather than aborting the
+  finding.
 
 ```go
 run, _ := strategy.Run(ctx, f, voters, opts)
 verdict, agreement := Vote(run.Results)
 if agreement == None {
-    verdict = Adjudicate(ctx, claude, f, run.Results)
+    adjudications := runJudges(ctx, judges, f, run.Results) // concurrent, stamped
+    verdict, _ = VoteJudges(adjudications)
 }
-totalCost := sum(run.Results) + run.ExtraCost
+totalCost := sum(run.Results) + run.ExtraCost + sum(adjudications)
 ```
+
+Judges are defined with `--judge` (repeatable): a built-in persona name
+(`adjudicator`, `strict`, `business`, `codeflow`) or `name=/path/prompt.md` for a
+custom focus file. Each persona's focus is layered over a fixed JSON output
+contract so all judges on a panel emit the same comparable schema.
 
 ## 9. Inputs
 

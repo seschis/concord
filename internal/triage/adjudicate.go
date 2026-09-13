@@ -8,8 +8,11 @@ import (
 	"github.com/seschis/concord/internal/finding"
 )
 
-// AdjudicationResult is the outcome of resolving a full disagreement.
+// AdjudicationResult is the outcome of a single judge resolving (or weighing in
+// on) a full disagreement. Judge and Model identify which judge produced it.
 type AdjudicationResult struct {
+	Judge             string  `json:"judge,omitempty"`
+	Model             string  `json:"model,omitempty"`
 	FinalVerdict      Verdict `json:"final_verdict"`
 	FinalConfidence   string  `json:"final_confidence,omitempty"`
 	Reasoning         string  `json:"final_reasoning,omitempty"`

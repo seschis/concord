@@ -40,12 +40,73 @@ func TestAdjudicationDrivesClassification(t *testing.T) {
 		"gemini": {Provider: "gemini", FinalVerdict: triage.NotExploitable},
 	}
 	adj := &triage.AdjudicationResult{FinalVerdict: triage.NotExploitable, Reasoning: "framework auto-escapes", KeyDecidingFactor: "template autoescape"}
-	row := NewFindingResult(f, results, triage.NotExploitable, "none", adj, 0)
+	adjudications := []triage.AdjudicationResult{*adj}
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
 	if row.ConcordAnalysis.Classification != "FALSE_POSITIVE" {
 		t.Fatalf("want FALSE_POSITIVE, got %s", row.ConcordAnalysis.Classification)
 	}
 	if row.ConcordAnalysis.Justification != "framework auto-escapes" {
 		t.Fatalf("justification should come from adjudication, got %q", row.ConcordAnalysis.Justification)
+	}
+}
+
+func TestAdjudicationsPanelRecorded(t *testing.T) {
+	f := finding.Finding{ID: "F003", File: "y.go", VulnType: "XSS", Severity: "MEDIUM"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "voter says exploitable"},
+	}
+	adjudications := []triage.AdjudicationResult{
+		{Judge: "strict", Model: "claude-opus", FinalVerdict: triage.NotExploitable, Reasoning: "strict says no taint"},
+		{Judge: "business", Model: "gemini", FinalVerdict: triage.LikelyReal, Reasoning: "business says exploitable"},
+	}
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
+	if len(row.Adjudications) != 2 {
+		t.Fatalf("want 2 adjudications recorded, got %d", len(row.Adjudications))
+	}
+	if row.ConcordAnalysis.Justification != "strict says no taint" {
+		t.Fatalf("justification should come from the judge matching the final verdict, got %q", row.ConcordAnalysis.Justification)
+	}
+	b, err := json.Marshal(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "adjudications") {
+		t.Fatalf("marshalled row should contain adjudications, got %s", string(b))
+	}
+}
+
+func TestMetaJudgesMarshal(t *testing.T) {
+	m := Meta{Judges: []string{"strict", "business"}}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"judges"`) {
+		t.Fatalf("Meta should marshal judges, got %s", string(b))
+	}
+}
+
+func TestMarkdownSurfacesJudgeError(t *testing.T) {
+	f := finding.Finding{ID: "F020", File: "z.go", VulnType: "XSS", Severity: "LOW"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.ConfirmedReal},
+		"gemini": {Provider: "gemini", FinalVerdict: triage.Unlikely},
+	}
+	adjudications := []triage.AdjudicationResult{
+		{Judge: "strict", Model: "claude", FinalVerdict: triage.Unlikely, Reasoning: "no taint"},
+		{Judge: "failing", Model: "claude", FinalVerdict: triage.NeedsMoreContext, Error: "boom"},
+	}
+	row := NewFindingResult(f, results, triage.Unlikely, "none", adjudications, 0)
+	dir := t.TempDir()
+	if _, err := WriteMarkdown(dir, Meta{Date: "2026-01-01", InputFile: "x.sarif"}, []FindingResult{row}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+	s := string(md)
+	for _, want := range []string{"Judge strict", "Judge failing", "error: boom", "no taint"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, s)
+		}
 	}
 }
 

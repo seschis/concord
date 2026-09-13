@@ -24,6 +24,7 @@ type Meta struct {
 	ContextGuides   []string `json:"context_guides,omitempty"`
 	Effort          string   `json:"effort,omitempty"`
 	Models          []string `json:"models"`
+	Judges          []string `json:"judges,omitempty"`
 	Total           int      `json:"total"`
 	TotalCostUSD    float64  `json:"total_cost_usd"`
 }
@@ -57,35 +58,36 @@ type CVSSParseError struct {
 // FindingResult is one finding plus every model's analysis and the derived
 // classification.
 type FindingResult struct {
-	ID              string                     `json:"id"`
-	File            string                     `json:"file"`
-	Line            int                        `json:"line,omitempty"`
-	Type            string                     `json:"type"`
-	Severity        string                     `json:"severity"`
-	CWE             string                     `json:"cwe,omitempty"`
-	Description     string                     `json:"description"`
-	FinalVerdict    string                     `json:"final_verdict"`
-	Agreement       string                     `json:"agreement"`
-	CVSS            *CVSS40                    `json:"cvss40,omitempty"`
-	CVSSError       *CVSSParseError            `json:"cvss40_error,omitempty"`
-	ExplorerCostUSD float64                    `json:"explorer_cost_usd,omitempty"`
-	Results         map[string]triage.Result   `json:"results"`
-	Adjudication    *triage.AdjudicationResult `json:"adjudication,omitempty"`
-	ConcordAnalysis ConcordAnalysis            `json:"concordAnalysis"`
+	ID              string                      `json:"id"`
+	File            string                      `json:"file"`
+	Line            int                         `json:"line,omitempty"`
+	Type            string                      `json:"type"`
+	Severity        string                      `json:"severity"`
+	CWE             string                      `json:"cwe,omitempty"`
+	Description     string                      `json:"description"`
+	FinalVerdict    string                      `json:"final_verdict"`
+	Agreement       string                      `json:"agreement"`
+	CVSS            *CVSS40                     `json:"cvss40,omitempty"`
+	CVSSError       *CVSSParseError             `json:"cvss40_error,omitempty"`
+	ExplorerCostUSD float64                     `json:"explorer_cost_usd,omitempty"`
+	Results         map[string]triage.Result    `json:"results"`
+	Adjudications   []triage.AdjudicationResult `json:"adjudications,omitempty"`
+	ConcordAnalysis ConcordAnalysis             `json:"concordAnalysis"`
 }
 
 // NewFindingResult assembles a result row from every model's analysis, the voted
-// final verdict, and (when the vote was a tie) the adjudication. The
-// concordAnalysis block derives from the adjudication if present,
-// otherwise from the result matching the final verdict.
-func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adj *triage.AdjudicationResult, explorerCost float64) FindingResult {
+// final verdict, and (when the vote was a tie) the judge panel's adjudications.
+// The concordAnalysis block derives from the judge matching the final verdict
+// if present, otherwise from the result matching the final verdict.
+func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64) FindingResult {
 	primary := pickPrimary(results, final)
 
 	just := ""
 	work := ""
-	if adj != nil {
-		just = adj.Reasoning
-		work = adj.KeyDecidingFactor
+	if len(adjudications) > 0 {
+		j := pickJudge(adjudications, final)
+		just = j.Reasoning
+		work = j.KeyDecidingFactor
 	}
 	if just == "" {
 		just = justification(primary)
@@ -106,7 +108,7 @@ func NewFindingResult(f finding.Finding, results map[string]triage.Result, final
 		Agreement:       agreement,
 		ExplorerCostUSD: explorerCost,
 		Results:         results,
-		Adjudication:    adj,
+		Adjudications:   adjudications,
 		ConcordAnalysis: ConcordAnalysis{
 			Classification: triage.Classification(final),
 			Justification:  just,
@@ -146,6 +148,29 @@ func pickPrimary(results map[string]triage.Result, final triage.Verdict) triage.
 		}
 		if r.FinalVerdict == final && r.Error == "" {
 			return r
+		}
+	}
+	if haveOK {
+		return firstOK
+	}
+	return any
+}
+
+// pickJudge chooses the judge whose verdict matches the final vote, else the
+// first non-errored judge, else any judge. Returns the zero value for an empty
+// panel.
+func pickJudge(adjudications []triage.AdjudicationResult, final triage.Verdict) triage.AdjudicationResult {
+	var firstOK, any triage.AdjudicationResult
+	haveOK, haveAny := false, false
+	for _, j := range adjudications {
+		if !haveAny {
+			any, haveAny = j, true
+		}
+		if j.Error == "" && !haveOK {
+			firstOK, haveOK = j, true
+		}
+		if j.FinalVerdict == final && j.Error == "" {
+			return j
 		}
 	}
 	if haveOK {

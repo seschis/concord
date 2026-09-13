@@ -155,26 +155,27 @@ func (p *LLMProvider) Gather(ctx context.Context, f finding.Finding, srcRoot str
 	return lr.FinalText, cost, nil
 }
 
-// Adjudicate resolves a full disagreement by reviewing every analysis.
-func (p *LLMProvider) Adjudicate(ctx context.Context, f finding.Finding, results []triage.Result, effort string) (triage.AdjudicationResult, error) {
+// AdjudicateAs resolves a full disagreement by reviewing every analysis,
+// labeling progress events with label and sending system as the system prompt.
+func (p *LLMProvider) AdjudicateAs(ctx context.Context, f finding.Finding, results []triage.Result, label, system, effort string) (triage.AdjudicationResult, error) {
 	prompt := triage.BuildAdjudicationPrompt(f, results)
 	msgs := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, triage.AdjudicationSystemPrompt),
+		llms.TextParts(llms.ChatMessageTypeSystem, system),
 		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
 	}
 	opts := []llms.CallOption{llms.WithModel(p.model), llms.WithMaxTokens(p.maxTokens)}
 	opts = append(opts, thinkingOpts(effort)...)
 
 	sink := progress.From(ctx)
-	sink.Emit(progress.Event{Kind: progress.Action, Provider: p.name, Role: progress.RoleAdjudicator, FindingID: f.ID, Action: "adjudicating tie"})
+	sink.Emit(progress.Event{Kind: progress.Action, Provider: label, Role: progress.RoleAdjudicator, FindingID: f.ID, Action: "adjudicating tie"})
 
 	resp, err := p.llm.GenerateContent(ctx, msgs, opts...)
 	if err != nil {
-		sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: p.name, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: "error"})
+		sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: label, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: "error"})
 		return triage.AdjudicationResult{Error: err.Error()}, err
 	}
 	if len(resp.Choices) == 0 {
-		sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: p.name, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: "error"})
+		sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: label, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: "error"})
 		return triage.AdjudicationResult{Error: "empty response"}, nil
 	}
 	text, _, u := agent.Collapse(resp)
@@ -182,8 +183,13 @@ func (p *LLMProvider) Adjudicate(ctx context.Context, f finding.Finding, results
 	adj.InputTokens = u.In
 	adj.OutputTokens = u.Out
 	adj.CostUSD = p.cost(p.model, u.In, u.Out, u.CacheWrite, u.CacheRead)
-	sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: p.name, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: string(adj.FinalVerdict), CostUSD: adj.CostUSD})
+	sink.Emit(progress.Event{Kind: progress.ModelDone, Provider: label, Role: progress.RoleAdjudicator, FindingID: f.ID, Verdict: string(adj.FinalVerdict), CostUSD: adj.CostUSD})
 	return adj, nil
+}
+
+// Adjudicate resolves a full disagreement by reviewing every analysis.
+func (p *LLMProvider) Adjudicate(ctx context.Context, f finding.Finding, results []triage.Result, effort string) (triage.AdjudicationResult, error) {
+	return p.AdjudicateAs(ctx, f, results, p.name, triage.AdjudicationSystemPrompt, effort)
 }
 
 func (p *LLMProvider) stamp(r *triage.Result, elapsed float64, u agent.Usage) {

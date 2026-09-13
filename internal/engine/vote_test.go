@@ -45,3 +45,39 @@ func TestVote(t *testing.T) {
 		})
 	}
 }
+
+func jr(verdicts ...triage.Verdict) []triage.AdjudicationResult {
+	out := make([]triage.AdjudicationResult, len(verdicts))
+	for i, v := range verdicts {
+		out[i] = triage.AdjudicationResult{FinalVerdict: v}
+	}
+	return out
+}
+
+func TestVoteJudges(t *testing.T) {
+	cases := []struct {
+		name          string
+		in            []triage.AdjudicationResult
+		wantVerdict   triage.Verdict
+		wantAgreement string
+	}{
+		{"single judge", jr(triage.Unlikely), triage.Unlikely, "single"},
+		{"judge majority breaks to conservative",
+			jr(triage.NotExploitable, triage.Unlikely, triage.ConfirmedReal),
+			triage.Unlikely, "majority"}, // not_real 2-1; most conservative not_real is UNLIKELY
+		{"judge two-two tie",
+			jr(triage.ConfirmedReal, triage.LikelyReal, triage.Unlikely, triage.NotExploitable),
+			triage.NeedsMoreContext, "none"},
+		{"judge all real",
+			jr(triage.ConfirmedReal, triage.LikelyReal),
+			triage.ConfirmedReal, "all"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			v, a := VoteJudges(c.in)
+			if v != c.wantVerdict || a != c.wantAgreement {
+				t.Fatalf("VoteJudges = (%s, %s), want (%s, %s)", v, a, c.wantVerdict, c.wantAgreement)
+			}
+		})
+	}
+}

@@ -31,25 +31,45 @@ func category(v triage.Verdict) string {
 // "majority" when one category strictly leads with two or more votes, and "none"
 // on a tie (which the caller resolves by adjudication).
 func Vote(results []triage.Result) (triage.Verdict, string) {
-	if len(results) == 0 {
+	vs := make([]triage.Verdict, len(results))
+	for i, r := range results {
+		vs[i] = r.FinalVerdict
+	}
+	return voteCore(vs)
+}
+
+// VoteJudges combines a judge panel's individual verdicts the same way Vote
+// combines voters: majority with a conservative tiebreak. It is how a panel of
+// judges (which may all run on the same model) resolves a disagreement.
+func VoteJudges(results []triage.AdjudicationResult) (triage.Verdict, string) {
+	vs := make([]triage.Verdict, len(results))
+	for i, r := range results {
+		vs[i] = r.FinalVerdict
+	}
+	return voteCore(vs)
+}
+
+// voteCore is the shared category-majority logic over a list of verdicts.
+func voteCore(vs []triage.Verdict) (triage.Verdict, string) {
+	if len(vs) == 0 {
 		return triage.NeedsMoreContext, "none"
 	}
-	if len(results) == 1 {
-		return results[0].FinalVerdict, "single"
+	if len(vs) == 1 {
+		return vs[0], "single"
 	}
 
 	byCat := map[string][]triage.Verdict{}
-	for _, r := range results {
-		c := category(r.FinalVerdict)
-		byCat[c] = append(byCat[c], r.FinalVerdict)
+	for _, v := range vs {
+		c := category(v)
+		byCat[c] = append(byCat[c], v)
 	}
 
 	maxN, ties, bestCat := 0, 0, ""
-	for c, vs := range byCat {
+	for c, votes := range byCat {
 		switch {
-		case len(vs) > maxN:
-			maxN, ties, bestCat = len(vs), 1, c
-		case len(vs) == maxN:
+		case len(votes) > maxN:
+			maxN, ties, bestCat = len(votes), 1, c
+		case len(votes) == maxN:
 			ties++
 		}
 	}
