@@ -1,7 +1,11 @@
 // Package cvss implements the CVSS 4.0 scoring algorithm.
 //
 // The scoring logic is a port of the FIRST reference JavaScript implementation
-// (BSD-2-Clause). This package has zero internal dependencies.
+// (BSD-2-Clause). The metric guidance embedded in the triage prompt
+// (internal/triage/prompts.go) condenses the scoring rubrics transcribed in
+// docs/cvss-v4-scoring-rubrics.txt, so a model can score as it triages.
+//
+// This package has zero internal dependencies.
 package cvss
 
 import (

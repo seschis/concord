@@ -1,6 +1,7 @@
 # concord — Design
 
-Status, draft. Experimental.
+Status: implemented. Phases 1 through 5 of the phased plan (section 13) are
+complete; the remaining items are in section 14.
 
 Module path, `github.com/seschis/concord`.
 
@@ -382,11 +383,12 @@ goreleaser to GitHub releases.
 5. goreleaser and CI. Then confirm or defer the advanced provider knobs from
    section 3.
 
-## 14. Open questions
+## 14. Open questions and known gaps
 
-- langchaingo is pinned at v0.1.14 for Gemini/Codex/Azure. The advanced Claude
-  knobs (prompt caching, per-model thinking) are resolved by moving Claude onto
-  `anthropic-sdk-go`; the one remaining gap is Gemini's ignored `thinking_budget`.
+- Claude prompt caching and per-model thinking are resolved by moving Claude
+  onto `anthropic-sdk-go` (the `anthropicNativeModel` adapter). Known gap:
+  langchaingo v0.1.14 (used for Gemini/Codex/Azure) ignores Gemini's
+  `thinking_budget`.
 - Whether the shared-strategy fallback when Claude is absent should be the
   deterministic gatherer (recommended) or a plain no-context run.
 - Whether to add a credential-manager integration path, or stay

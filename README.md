@@ -1,6 +1,7 @@
 # concord
 
 ![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8)
+![CI](https://github.com/seschis/concord/actions/workflows/ci/badge.svg)
 ![Release](https://img.shields.io/github/v/release/seschis/concord)
 ![License](https://img.shields.io/badge/License-Apache--2.0-blue)
 
@@ -11,6 +12,23 @@ judge each finding independently, takes a majority vote, and adjudicates ties
 by having Claude review every analysis.
 
 It reads and writes local files only. No backend, no LLM proxy, no telemetry.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["Scanner findings (SARIF, JSON, CSV, Markdown, XLSX)"] --> B["Ingest and normalize"]
+    B --> C{"Context strategy"}
+    C -->|"shared (default)"| D["One explorer agent reads the repo<br/>and writes a shared brief"]
+    C -->|"per-model"| E["Each model crawls the repo itself<br/>with sandboxed file tools"]
+    D --> F["Independent verdicts, each with a CVSS 4.0 score<br/>Claude, Gemini, Codex, Azure"]
+    E --> F
+    F --> G{"Majority vote"}
+    G -->|"category agreed"| H["Most conservative agreed verdict stands"]
+    G -->|"tie"| I["Adjudicator reviews every analysis<br/>and issues the deciding factor"]
+    H --> J["results.json + report.md<br/>+ per-finding transcripts"]
+    I --> J
+```
 
 ## Why multi-model voting
 
