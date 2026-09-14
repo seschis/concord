@@ -26,6 +26,7 @@ import (
 type Header struct {
 	InputFile string
 	Models    []string
+	Analysts  []string // analyst-panel persona names, if any
 	Strategy  string
 	SrcRoot   string
 	Effort    string
@@ -299,6 +300,9 @@ func (m *Model) View() string {
 	b.WriteString(headerStyle.Render("concord") + dimStyle.Render(
 		fmt.Sprintf("  %s · %s · effort=%s", short(m.header.InputFile), m.header.Strategy, m.header.Effort)) + "\n")
 	b.WriteString(dimStyle.Render("models: "+models) + "\n")
+	if len(m.header.Analysts) > 0 {
+		b.WriteString(dimStyle.Render("analysts: "+strings.Join(m.header.Analysts, ", ")) + "\n")
+	}
 	if len(m.header.Context) > 0 {
 		b.WriteString(dimStyle.Render("context: "+strings.Join(m.header.Context, ", ")) + "\n")
 	}

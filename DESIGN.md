@@ -318,6 +318,17 @@ Judges are defined with `--judge` (repeatable): a built-in persona name
 custom focus file. Each persona's focus is layered over a fixed JSON output
 contract so all judges on a panel emit the same comparable schema.
 
+The same persona idea applies at the **voting** stage as the **analyst panel**:
+`--analyst` (repeatable) adds analyzer "lenses" (`strict`, `business`, `codeflow`,
+or `name=/path/prompt.md`) that vote as extra voters on the preferred model. This
+is the single-provider case — with only one LLM available the cross-model vote
+degenerates (one voter, never a tie, so the judge panel never fires), and
+same-model analysts restore a real ensemble. Each analyst is a clone of the
+preferred provider carrying a persona lens layered over the base triage prompt;
+the existing `Vote` handles them unchanged, and in the default `shared` strategy
+they run single-shot over the one shared brief, so the cost is a few extra
+analysis calls rather than extra repo crawls.
+
 ## 9. Inputs
 
 Five input formats. `detect.go` dispatches on extension and content.

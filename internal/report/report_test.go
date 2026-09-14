@@ -110,6 +110,44 @@ func TestMarkdownSurfacesJudgeError(t *testing.T) {
 	}
 }
 
+// An analyst lens must appear both in the report header and as its own "(analyst)"
+// row in the per-finding verdict table, distinct from the model voters.
+func TestMarkdownAnalystTable(t *testing.T) {
+	f := finding.Finding{ID: "F030", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "claude sees it real"},
+		"strict": {Provider: "strict", FinalVerdict: triage.NotExploitable, Summary: "strict disagrees"},
+	}
+	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
+	dir := t.TempDir()
+	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", Analysts: []string{"strict"}}
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+	s := string(md)
+	for _, want := range []string{"**Analysts:** strict", "claude (voter)", "strict (analyst)", "strict disagrees"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, s)
+		}
+	}
+	// A run with no analysts must not render an empty Analysts header.
+	if strings.Contains(s, "**Analysts:**\n") {
+		t.Fatalf("should not render an empty Analysts header")
+	}
+}
+
+// Meta.Analysts marshals like Meta.Judges.
+func TestMetaAnalystsMarshal(t *testing.T) {
+	b, err := json.Marshal(Meta{Models: []string{"Claude (claude-opus-5)"}, Analysts: []string{"strict", "business"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"analysts"`) {
+		t.Fatalf("Meta should marshal analysts, got %s", string(b))
+	}
+}
+
 func TestCVSSValidVectorScored(t *testing.T) {
 	f := finding.Finding{ID: "F010", File: "x.go", VulnType: "SQLi", Severity: "HIGH"}
 	vec := "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N"

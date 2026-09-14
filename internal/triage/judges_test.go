@@ -21,6 +21,23 @@ func TestFocusForBuiltInPersonas(t *testing.T) {
 	}
 }
 
+// AnalystPersonaNames are the diverse "lens" personas usable as triage analysts —
+// the built-in personas minus the neutral "adjudicator" default judge.
+func TestAnalystPersonaNames(t *testing.T) {
+	lenses := AnalystPersonaNames()
+	if len(lenses) != 3 {
+		t.Fatalf("want 3 analyst lenses, got %d: %v", len(lenses), lenses)
+	}
+	for _, l := range lenses {
+		if _, ok := FocusFor(l); !ok {
+			t.Fatalf("analyst lens %q must resolve to a built-in persona", l)
+		}
+	}
+	if _, ok := FocusFor("adjudicator"); !ok {
+		t.Fatalf("adjudicator must remain a built-in persona (for judges)")
+	}
+}
+
 func TestBuildJudgeSystemPromptAlwaysCarriesContract(t *testing.T) {
 	for name, focus := range builtInPersonas {
 		prompt := BuildJudgeSystemPrompt(focus)

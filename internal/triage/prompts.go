@@ -93,6 +93,21 @@ Gather the context a triage engineer needs to decide whether the finding is a re
 
 Be efficient. Use a handful of targeted list_dir, read_file, and search calls, not an exhaustive crawl. When you have enough, STOP calling tools and reply with ONLY the brief as plain text (no preamble). Cover the owning service and its purpose, deployment exposure, relevant data flow and trust boundaries, existing mitigations, and anything that makes the finding more or less reachable. Do not restate the finding itself.`
 
+// analystLensHeader frames a persona focus as an additional lens on the base
+// triage analysis, without altering the required JSON output.
+const analystLensHeader = `Apply the following lens to the entire analysis above. Let it drive how you weigh evidence, trace the data flow, and settle your final verdict — while still emitting exactly the JSON object specified above.
+
+LENS:`
+
+// BuildAnalystSystemPrompt composes an analyzer's system prompt from the base
+// triage prompt plus a persona "lens". The lens refocuses how the analyst weighs
+// evidence and settles a verdict, while the base prompt's JSON output contract is
+// preserved so analyst verdicts stay comparable across a panel (and can be voted
+// on) — the same idea as a judge persona, applied to the triage stage.
+func BuildAnalystSystemPrompt(focus string) string {
+	return SystemPrompt + "\n\n" + analystLensHeader + "\n" + strings.TrimSpace(focus)
+}
+
 // BuildUserPrompt renders a finding (and any pre-gathered shared context) into
 // the user turn.
 func BuildUserPrompt(f finding.Finding, sharedContext string) string {

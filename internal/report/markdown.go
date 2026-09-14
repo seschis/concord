@@ -20,6 +20,9 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 	fmt.Fprintf(&b, "**Date:** %s\n\n", meta.Date)
 	fmt.Fprintf(&b, "**Input file:** `%s`\n\n", meta.InputFile)
 	fmt.Fprintf(&b, "**Models:** %s\n\n", strings.Join(meta.Models, ", "))
+	if len(meta.Analysts) > 0 {
+		fmt.Fprintf(&b, "**Analysts:** %s\n\n", strings.Join(meta.Analysts, ", "))
+	}
 	fmt.Fprintf(&b, "**Context strategy:** %s", meta.ContextStrategy)
 	if meta.SrcRoot != "" {
 		fmt.Fprintf(&b, " (srcroot `%s`)", meta.SrcRoot)
@@ -120,6 +123,18 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 				note = "error: " + mr.Error
 			}
 			fmt.Fprintf(&b, "| %s (voter) | %s | $%.4f | %s |\n", name, mr.FinalVerdict, mr.CostUSD, mdCell(note))
+		}
+		// Analyst lenses (persona voters on the preferred model), if any.
+		for _, name := range meta.Analysts {
+			mr, ok := r.Results[name]
+			if !ok {
+				continue
+			}
+			note := mr.Summary
+			if mr.Error != "" {
+				note = "error: " + mr.Error
+			}
+			fmt.Fprintf(&b, "| %s (analyst) | %s | $%.4f | %s |\n", name, mr.FinalVerdict, mr.CostUSD, mdCell(note))
 		}
 		b.WriteString("\n")
 

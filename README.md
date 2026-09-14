@@ -47,13 +47,16 @@ ensemble problem instead:
   focus/personality lens) on a model — several judges can even run on one model
   and still disagree usefully — and the panel's verdicts are combined with the
   same majority vote to produce the final verdict and the deciding factor.
+- With only one provider, `--analyst` lenses apply the same persona idea to the
+  vote itself: extra voters on your single model restore a real ensemble
+  (see [Getting an ensemble from one model](#getting-an-ensemble-from-one-model--analyst)).
 - A model or judge that fails or times out drops out of its vote rather than
   aborting the finding.
 
 ## What it does
 
-- Four-model triage with a majority vote and a persona-driven judge panel that
-  breaks ties.
+- Four-model triage with a majority vote, a persona-driven judge panel that
+  breaks ties, and `--analyst` lenses for a real ensemble on a single model.
 - On-demand, tool-calling source reading, sandboxed to `--srcroot`.
 - Two context strategies via `--context-strategy`: `shared` (one explorer
   reads the repo, all voters share the brief, cheaper) and `per-model` (each
@@ -212,6 +215,36 @@ concord --judge skeptic=./personas/skeptic.md -o ./out findings.sarif
 
 With no `--judge` flags the panel is a single `adjudicator` judge (the legacy
 adjudication prompt), so default behavior is unchanged.
+
+## Getting an ensemble from one model (`--analyst`)
+
+The whole value of `concord` is the ensemble, but the cross-model vote only kicks
+in with two or more providers. If you have credentials for a single LLM, the vote
+degenerates to one verdict (no tie, so the judge panel never fires). `--analyst`
+fixes that: it adds **analyzer lenses** — the same personas as judges — that vote
+as *extra voters on your one model*. Several lenses on the same model still reach
+different verdicts, so you get a real majority vote, and it can even reach a tie
+that convenes the judge panel.
+
+Every analyst runs on the preferred model and votes as an ordinary voter, so the
+existing vote and report handle it with no other change. In the default `shared`
+strategy the analysts run single-shot over the one shared brief (a few extra
+analysis calls, not extra repo crawls); `per-model` runs an agentic loop per
+analyst. Built-in lenses are `strict`, `business`, and `codeflow`; pass
+`name=/path/prompt.md` for your own lens.
+
+```bash
+# Three lenses on your single model: a real 4-way vote (1 model + 3 analysts)
+concord --analyst strict --analyst business --analyst codeflow -o ./out findings.sarif
+
+# Lenses plus a judge panel, so a single-model run uses the full machinery
+concord --analyst strict --analyst business --judge strict --judge codeflow -o ./out findings.sarif
+
+# A custom lens from a file
+concord --analyst paranoid=./personas/paranoid.md -o ./out findings.sarif
+```
+
+With no `--analyst` flags the behavior is exactly as before (one voter per model).
 
 ## Extra architecture context (`--context-dir`)
 

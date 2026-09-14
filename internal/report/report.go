@@ -24,6 +24,7 @@ type Meta struct {
 	ContextGuides   []string `json:"context_guides,omitempty"`
 	Effort          string   `json:"effort,omitempty"`
 	Models          []string `json:"models"`
+	Analysts        []string `json:"analysts,omitempty"`
 	Judges          []string `json:"judges,omitempty"`
 	Total           int      `json:"total"`
 	TotalCostUSD    float64  `json:"total_cost_usd"`

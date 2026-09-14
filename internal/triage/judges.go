@@ -45,6 +45,15 @@ func BuiltInPersonaNames() []string {
 	return []string{"adjudicator", "strict", "business", "codeflow"}
 }
 
+// AnalystPersonaNames lists the personas usable as triage-analyzer lenses — the
+// diverse "lens" personas. The neutral "adjudicator" persona is the default judge
+// and is deliberately NOT offered as an analyst lens: its focus is framed for
+// adjudicating between several analyses, which is incoherent for a single
+// triage analyst. Keep in sync with the lens entries above.
+func AnalystPersonaNames() []string {
+	return []string{"strict", "business", "codeflow"}
+}
+
 // BuildJudgeSystemPrompt composes a judge's full system prompt from a focus
 // (persona) block plus the fixed JSON output contract. The contract is always
 // appended so all judges on a panel stay comparable.

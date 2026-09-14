@@ -29,10 +29,23 @@ type LLMProvider struct {
 	model     string
 	maxTokens int
 	cost      costFunc
+	// system, when non-empty, replaces the default triage SystemPrompt for the
+	// Analyze paths. Analyst voters set it to a persona-lens prompt (see
+	// NewAnalyst); ordinary model providers leave it empty.
+	system string
 }
 
 func (p *LLMProvider) Name() string  { return p.name }
 func (p *LLMProvider) Model() string { return p.model }
+
+// systemPrompt returns the system prompt for the Analyze paths: the persona-lens
+// override when present, else the shared triage prompt.
+func (p *LLMProvider) systemPrompt() string {
+	if p.system != "" {
+		return p.system
+	}
+	return triage.SystemPrompt
+}
 
 // Analyze triages one finding. With in.Tools set it runs the agentic loop;
 // otherwise it runs single-shot with any injected shared context.
@@ -42,7 +55,7 @@ func (p *LLMProvider) Analyze(ctx context.Context, f finding.Finding, in Analyze
 	}
 	user := triage.BuildUserPrompt(f, in.SharedContext)
 	msgs := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, triage.SystemPrompt),
+		llms.TextParts(llms.ChatMessageTypeSystem, p.systemPrompt()),
 		llms.TextParts(llms.ChatMessageTypeHuman, user),
 	}
 
@@ -107,7 +120,7 @@ func (p *LLMProvider) analyzeAgentic(ctx context.Context, f finding.Finding, in 
 	sink := progress.From(ctx)
 	start := time.Now()
 	lr, err := agent.RunToolLoop(ctx, agent.LoopOptions{
-		Model: p.llm, ModelName: p.model, System: triage.SystemPrompt, User: user,
+		Model: p.llm, ModelName: p.model, System: p.systemPrompt(), User: user,
 		Tools: tb.Definitions(), Exec: tb.Exec, MaxIters: maxIters, MaxTokens: p.maxTokens,
 		OnStep: p.stepReporter(ctx, sink, progress.RoleVoter, f.ID),
 		Pruner: agent.PrunerFrom(ctx),

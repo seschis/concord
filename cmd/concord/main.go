@@ -53,6 +53,11 @@ type config struct {
 	judges      []string // --judge: "name" or "name=/path/prompt.md" (repeatable)
 	judgeModels []string // --judge-model: "name=claude|gemini|codex|azure" (repeatable)
 
+	// analysts is the triage-analyzer panel: personas (built-in lens or a custom
+	// prompt file) that vote as extra analysts on the preferred model, so a
+	// single-model run still gets an ensemble vote.
+	analysts []string // --analyst: "name" or "name=/path/prompt.md" (repeatable)
+
 	maxTokens       int
 	outputDir       string
 	contextStrategy string
@@ -111,6 +116,9 @@ func main() {
 		"adjudication panel: a judge persona. Built-in names: adjudicator | strict | business | codeflow, or 'name=/path/prompt.md' to supply your own focus file (the JSON output contract is appended automatically). Repeatable. Every judge defaults to the preferred model (override with --judge-model), so a single-model run still yields a diverse panel")
 	f.StringArrayVar(&cfg.judgeModels, "judge-model", nil,
 		"override a judge's model: 'name=claude|gemini|codex|azure' (repeatable); a judge without this uses the default preferred model")
+
+	f.StringArrayVar(&cfg.analysts, "analyst", nil,
+		"triage-analyzer panel: an analyst persona. Built-in names: strict | business | codeflow, or 'name=/path/prompt.md' to supply your own lens (the triage JSON output contract is preserved). Repeatable. Every analyst runs on the preferred model and votes as an extra voter, so a single-model run still yields an ensemble vote that can reach a tie")
 
 	f.IntVar(&cfg.maxTokens, "max-tokens", 16000, "max tokens per model call")
 	f.StringVarP(&cfg.outputDir, "output-dir", "o", "./triage-output", "output directory")
@@ -206,6 +214,16 @@ func run(ctx context.Context, cfg *config, input string) error {
 	}
 
 	judges, judgeNames := buildJudges(voters, cfg)
+	analysts, analystNames := buildAnalysts(voters, cfg)
+
+	// Analysts join the vote as extra voters on the preferred model; the engine
+	// sees models + analysts, while the report keeps them separate (Meta.Models
+	// vs Meta.Analysts). Build the combined set without mutating the originals
+	// (buildJudges above already reads voters[0] as the preferred model).
+	allVoters := voters
+	if len(analysts) > 0 {
+		allVoters = append(append([]provider.Provider{}, voters...), analysts...)
+	}
 
 	strategy, err := engine.NewStrategy(cfg.contextStrategy, gatherer)
 	if err != nil {
@@ -230,6 +248,13 @@ func run(ctx context.Context, cfg *config, input string) error {
 		} else {
 			fmt.Printf("Judge: %s\n", judgeNames[0])
 		}
+		if len(analystNames) > 0 {
+			note := ""
+			if strategy.Name() == "per-model" {
+				note = " (per-model: one agentic loop per analyst — shared strategy is cheaper)"
+			}
+			fmt.Printf("Analyst panel: %s%s\n", strings.Join(analystNames, ", "), note)
+		}
 	}
 
 	if !cfg.noTranscripts {
@@ -241,7 +266,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 	}
 
 	eng := &engine.Engine{
-		Voters:       voters,
+		Voters:       allVoters,
 		Strategy:     strategy,
 		Judges:       judges,
 		SrcRoot:      cfg.srcRoot,
@@ -254,7 +279,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 
 	if useTUI {
 		hdr := tui.Header{
-			InputFile: input, Models: names, Strategy: strategy.Name(),
+			InputFile: input, Models: names, Analysts: analystNames, Strategy: strategy.Name(),
 			SrcRoot: cfg.srcRoot, Effort: cfg.effort,
 			Context: contextRootLabels(contextRoots),
 		}
@@ -294,6 +319,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 		ContextGuides:   discoveredGuides(cfg, contextRoots),
 		Effort:          cfg.effort,
 		Models:          names,
+		Analysts:        analystNames,
 		Judges:          judgeNames,
 		Total:           len(findings),
 		TotalCostUSD:    cost,
@@ -434,7 +460,54 @@ func buildJudges(voters []provider.Provider, cfg *config) ([]engine.Judge, []str
 	return judges, names
 }
 
-// splitSpec splits a "name=value" judge spec on the first '='. No '=' (or an empty
+// buildAnalysts assembles the triage-analyzer panel from the --analyst flags.
+// Each analyst is a persona (a built-in lens or a custom prompt file) running on
+// the preferred model (voters[0]) — deliberately no model override, since the
+// point is ensemble diversity on a single model. Analysts join the vote as
+// ordinary voters. With no --analyst flags the panel is empty (default unchanged).
+func buildAnalysts(voters []provider.Provider, cfg *config) ([]provider.Provider, []string) {
+	if len(voters) == 0 {
+		return nil, nil
+	}
+	base := voters[0].(*provider.LLMProvider)
+
+	// Built-in analysts are the "lens" personas (the neutral "adjudicator" judge
+	// persona is not a valid analyst lens). A custom name may be supplied via a
+	// prompt file instead.
+	valid := make(map[string]bool, len(triage.AnalystPersonaNames()))
+	for _, n := range triage.AnalystPersonaNames() {
+		valid[n] = true
+	}
+
+	var analysts []provider.Provider
+	var names []string
+	for _, spec := range cfg.analysts {
+		name, file := splitSpec(spec)
+		if name == "" {
+			continue
+		}
+		var focus string
+		if file != "" {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				fmt.Printf("  skipping analyst %q: %s\n", name, short(err.Error()))
+				continue
+			}
+			focus = string(data)
+		} else if !valid[name] {
+			fmt.Printf("  skipping analyst %q: unknown persona (built-in: %s) or use name=/path/prompt.md\n",
+				name, strings.Join(triage.AnalystPersonaNames(), ", "))
+			continue
+		} else {
+			focus, _ = triage.FocusFor(name)
+		}
+		analysts = append(analysts, provider.NewAnalyst(base, name, focus))
+		names = append(names, name)
+	}
+	return analysts, names
+}
+
+// splitSpec splits a "name=value" spec on the first '='. No '=' (or an empty
 // value) yields an empty value — e.g. a bare built-in persona name.
 func splitSpec(spec string) (string, string) {
 	name, value, _ := strings.Cut(spec, "=")

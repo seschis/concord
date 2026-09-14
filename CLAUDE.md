@@ -9,7 +9,9 @@ An experimental Go tool that triages security scanner findings with up to four
 LLMs (Claude, Gemini, Codex/direct-OpenAI, Azure OpenAI), takes a majority
 vote, and breaks ties with a **judge panel** (several persona-driven judges,
 often on the same model, whose verdicts are combined by the same
-category-majority vote — see the note under *Common changes*).
+category-majority vote — see the note under *Common changes*). When only one
+LLM provider is available, `--analyst` lenses let a single model still produce
+a real ensemble vote (see *Common changes* → *Analyst panel*).
 
 Hard constraints, do not violate these.
 
@@ -217,9 +219,28 @@ swallowed — it must never break a triage run.
   Each judge is a single-shot call through
   `(*provider.LLMProvider).AdjudicateAs` (label/system overridable); a failed
   judge is normalized to `NEEDS_MORE_CONTEXT` in `runJudges` so it can never
-  leak an empty verdict. Per-finding results carry `adjudications []triage.
-  AdjudicationResult` (each with `Judge`/`Model`); `report.Meta.Judges` lists
-  the panel; the TUI gives each judge its own row.
+   leak an empty verdict. Per-finding results carry `adjudications []triage.
+   AdjudicationResult` (each with `Judge`/`Model`); `report.Meta.Judges` lists
+   the panel; the TUI gives each judge its own row.
+
+- **Analyst panel (ensemble on one model).** Most runs have a single LLM
+  provider, so the cross-model vote degenerates (one voter → never ties → the
+  judge panel never fires). `--analyst` (repeatable) adds triage-analyzer
+  "lenses" that vote as **extra voters on the preferred model** (`voters[0]`),
+  so a single-model run still gets a real ensemble vote — and can reach a tie
+  that convenes the judge panel. Built-in lenses: `strict`, `business`,
+  `codeflow` (`triage.AnalystPersonaNames`; the neutral `adjudicator` judge
+  persona is deliberately NOT an analyst lens); `name=/path.md` for a custom
+  lens. Each analyst is a `provider.NewAnalyst` clone of the preferred
+  `*LLMProvider` (same client/model/pricing) with a distinct label and a
+  persona-lens system prompt (`triage.BuildAnalystSystemPrompt` = base triage
+  prompt + lens, the JSON contract preserved). Analysts are appended to
+  `e.Voters` in `cmd/concord/main.go` (`buildAnalysts`), so the existing
+  `Vote`/`Strategy` handle them unchanged. `--context-strategy shared` keeps
+  them cheap (single-shot over the one shared brief); `per-model` runs an
+  agentic loop per analyst (a banner note warns). Report: `report.Meta.Analysts`
+  + per-finding `(analyst)` table rows (data-driven over `meta.Analysts`); TUI:
+  an `analysts:` header line + a row per analyst (rows are already data-driven).
 
 ## Conventions
 

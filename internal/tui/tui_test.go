@@ -184,6 +184,30 @@ func TestApplyJudgePanelRows(t *testing.T) {
 	}
 }
 
+// TestViewAnalystHeader verifies the static header surfaces the analyst panel,
+// and analyst voters each get their own row (labeled by persona name).
+func TestViewAnalystHeader(t *testing.T) {
+	m := NewModel(Header{Models: []string{"claude"}, Analysts: []string{"strict", "business"}}, nil, time.Now())
+	out := m.View()
+	if !strings.Contains(out, "analysts: strict, business") {
+		t.Fatalf("View() missing analysts header:\n%s", out)
+	}
+
+	// Analysts are ordinary voters: each gets a distinct row on first sighting.
+	m.apply(prog.Event{Kind: prog.FindingStart, FindingID: "F1"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "claude", Role: prog.RoleVoter, Verdict: "LIKELY_REAL"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "strict", Role: prog.RoleVoter, Verdict: "UNLIKELY"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "business", Role: prog.RoleVoter, Verdict: "UNLIKELY"})
+	if len(m.rows) != 3 {
+		t.Fatalf("rows = %d, want 3 (claude + 2 analysts): %+v", len(m.rows), m.rows)
+	}
+	for i, want := range []string{"claude", "strict", "business"} {
+		if m.rows[i].label != want {
+			t.Fatalf("row[%d] label = %q, want %q", i, m.rows[i].label, want)
+		}
+	}
+}
+
 // TestFindingStartResetsRows verifies a new finding clears the prior finding's
 // per-model rows so stale state never bleeds across findings.
 func TestFindingStartResetsRows(t *testing.T) {
