@@ -5,13 +5,15 @@ architecture; this file captures the non-obvious things that will trip you up.
 
 ## What this is
 
-An experimental Go tool that triages security scanner findings with up to four
-LLMs (Claude, Gemini, Codex/direct-OpenAI, Azure OpenAI), takes a majority
-vote, and breaks ties with a **judge panel** (several persona-driven judges,
-often on the same model, whose verdicts are combined by the same
-category-majority vote — see the note under *Common changes*). When only one
-LLM provider is available, `--analyst` lenses let a single model still produce
-a real ensemble vote (see *Common changes* → *Analyst panel*).
+An experimental Go tool that triages security scanner findings with LLMs —
+the four built-in presets (Claude, Gemini, OpenAI, Azure OpenAI) plus any
+custom models defined in `concord.toml` or with `--add-model` (see *Common
+changes* → *Add a model via config*) — takes a majority vote, and breaks ties
+with a **judge panel** (several persona-driven judges, often on the same model,
+whose verdicts are combined by the same category-majority vote — see the note
+under *Common changes*). When only one LLM provider is available, `--analyst`
+lenses let a single model still produce a real ensemble vote (see *Common
+changes* → *Analyst panel*).
 
 Hard constraints, do not violate these.
 
@@ -30,6 +32,8 @@ make snapshot  # local goreleaser build, no publish
 ```
 
 Go 1.26+. LLM dependency is `github.com/tmc/langchaingo` (pinned v0.1.14).
+Model config is `github.com/BurntSushi/toml` (a direct dependency of the
+provider package, strict-decoded `concord.toml`).
 
 ## Package layout and the import rule
 
@@ -43,7 +47,7 @@ cvss       (no internal deps)              (CVSS 4.0 vector parsing, scoring, se
 bundle     (no internal deps)              (context-dir export/import: manifest, scan, tar.gz bundle)
 triage     -> finding                      (Result, Verdict, prompts, parsing, adjudication types)
 agent      -> langchaingo/llms only        (tool loop + sandboxed file tools; NO finding/triage/provider)
-provider   -> agent, finding, progress, transcript, triage   (LLMProvider base + 4 constructors + pricing)
+provider   -> agent, finding, progress, transcript, triage   (LLMProvider base + ModelSpec/NewFromSpec protocol factory + concord.toml config + pricing)
 ingest     -> finding
 report     -> cvss, finding, triage
 engine     -> provider, report, progress, triage, finding   (strategy, vote, adjudicate orchestrator)
@@ -100,11 +104,11 @@ swallowed — it must never break a triage run.
   aggregates tool calls across all choices, and reads token usage once (usage is
   duplicated across choices, not additive, so do not sum it).
 
-- **Both Claude paths run on `anthropic-sdk-go`, not langchaingo.** `NewClaude`
-  (direct API) and `NewClaudeBedrock` (Bedrock) both build one adapter,
+- **Both Claude paths run on `anthropic-sdk-go`, not langchaingo.** The direct
+  API and Bedrock anthropic specs both build one adapter,
   `provider.anthropicNativeModel` in `anthropic_native.go`, that implements
   langchaingo's `llms.Model` so the tool loop / single-shot / adjudicate paths are
-  unchanged. langchaingo only backs Gemini, OpenAI (Codex), and Azure now. The
+  unchanged. langchaingo only backs Gemini, OpenAI, and Azure now. The
   adapter is why prompt caching works; keep any new Claude-request tuning in the
   adapter's `buildParams` / `applyReasoning`, not in langchaingo call options.
 
@@ -117,7 +121,7 @@ swallowed — it must never break a triage run.
   through `agent.Usage` (`CacheWrite`/`CacheRead`), the per-finding transcript
   Step, and the cache-aware cost functions (cache read 0.1x input; cache write
   1.25x input for the 5m TTL — it would be 2x for a 1h TTL, so `cacheWriteMult` in
-  `pricing.go` is kept in sync with `cacheTTL` in `constructors.go`). If
+  `pricing.go` is kept in sync with `cacheTTL` in `cache.go`). If
   `cache_read_input_tokens` stays 0 across a multi-turn run, a silent invalidator
   is at work — the prefix must be byte-identical turn to turn.
 
@@ -143,7 +147,18 @@ swallowed — it must never break a triage run.
   adaptive/none models.
 
 - **`--effort` on the agentic path** still sets only the tool-iteration budget
-  (`agent.MaxItersForEffort`); it does not enable thinking there.
+  (`agent.MaxItersForEffort`); it does not enable thinking there. On the openai
+  and azure protocols `--effort` is a no-op entirely: the pinned langchaingo
+  v0.1.14 openai client sends no `reasoning_effort` parameter (pinned by a
+  request-body test), so custom OpenAI-protocol servers never receive a knob.
+
+- **`codex` is now `openai`** (machine name, flags, report rows). Canonical
+  flags: `--openai-model`, `--openai-api-key`, `--openai-endpoint`,
+  `--no-openai`. The deprecated aliases `--codex-model`, `--codex-api-key`, and
+  `--no-codex` are hidden from `--help` but still honored (they warn when used;
+  `--no-codex` also skips a model literally named `codex`), and
+  `--judge-model ...=codex` still resolves to the openai voter. `-m`/`--model`
+  still means the Claude model id.
 
 - **Claude via Bedrock** (`--bedrock`, auto-on when `CLAUDE_CODE_USE_BEDROCK` or
   `AWS_BEARER_TOKEN_BEDROCK` is set) uses `anthropic-sdk-go/bedrock`
@@ -188,14 +203,32 @@ swallowed — it must never break a triage run.
 
 ## Common changes
 
-- **Add a provider**, write a constructor in `provider/constructors.go` returning
-  `*LLMProvider` with the right client (langchaingo for non-Claude, the
-  `anthropicNativeModel` adapter for Claude) and a cost function, add a pricing
-  table + `cost*` func in `provider/pricing.go`, and register it in
-  `cmd/concord/main.go` `resolveProviders`. The base handles single-shot,
-  agentic, gather, and adjudicate for free. `cost*` funcs take
-  `(model, in, out, cacheWrite, cacheRead int)`; non-Claude providers report zero
-  cache tokens, so those terms vanish.
+- **Add a model via config.** Models are data, not code: a `[[models]]` entry
+  in `concord.toml` (discovered in the cwd, then the input file's directory;
+  `--config PATH` wins) or a one-shot `--add-model "name,key=value,..."` flag
+  (repeatable). Keys: `protocol`, `endpoint`, `api_key`, `model`,
+  `context_window`, `price_in`, `price_out`, `bedrock`, `region`,
+  `api_version`. `openai` and `anthropic` accept custom endpoints (the openai
+  endpoint is the root including `/v1`; anthropic any base URL); `gemini` and
+  `azure` are preset-only. The four presets are `ModelSpec` values in
+  `provider/spec.go` run through the same `NewFromSpec` factory as custom
+  specs, so there is no registration step: `cmd/concord/main.go` `resolveSpecs`
+  merges the layers per field (flag > file > preset), strict-decodes the TOML
+  (unknown key or duplicate name = error), validates (`context_window >= 4096`,
+  required for custom specs; name `[a-z0-9-]`; reserved persona names
+  `adjudicator`/`strict`/`business`/`codeflow` rejected; price pair), then
+  builds each resolvable spec. A keyless local endpoint (explicit `endpoint`,
+  no key resolvable anywhere) runs on a placeholder token. An explicit
+  `price_in`/`price_out` pair wins over the built-in tables; an unpriced model
+  costs $0 and carries a visible marker.
+  A constructor-level change is only needed for a genuinely NEW protocol: add
+  a case in `provider.NewFromSpec` (the one-way import graph holds — `provider`
+  may import langchaingo/llms and anthropic-sdk-go, nothing else), a pricing
+  table in `provider/pricing.go` (`costFunc` takes
+  `(model, in, out, cacheWrite, cacheRead int)`; non-Claude protocols report
+  zero cache tokens, so those terms vanish), and the protocol's resolvability
+  predicate in `ModelSpec.Resolvable`. The `LLMProvider` base handles
+  single-shot, agentic, gather, and adjudicate for free.
 
 - **Add an input format**, add a `parse*` in `internal/ingest` and a case in
   `ingest.Load`. Map to the normalized `finding.Finding`.

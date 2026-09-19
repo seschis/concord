@@ -1,0 +1,48 @@
+# concord.toml — model config for concord.
+#
+# [[models]] entries extend or override the built-in presets (claude, gemini,
+# openai, azure). Fields merge per model name with precedence flag > file >
+# preset, so a file can override just one field of a preset. Decoding is
+# strict: an unknown key is an error, and a name repeated within this file is
+# an error (repeated --add-model for the same name is last-wins).
+#
+# The file is discovered automatically when --config is unset: concord.toml in
+# the working directory, then the input file's directory.
+
+# A local vLLM server speaking the OpenAI API. context_window is required for
+# custom models (>= 4096). A keyless local endpoint needs no api_key: an
+# explicit endpoint with no key anywhere runs on a placeholder token.
+[[models]]
+name = "qwen"
+protocol = "openai"
+endpoint = "http://127.0.0.1:8000/v1"  # openai endpoint is the root including /v1
+model = "Qwen3.8-27B"
+context_window = 262144
+# api_key = "env:VLLM_KEY"  # literal key, or "env:NAME"; omitted = protocol default
+# price_in = 0.0           # USD per 1M tokens; set both price fields or neither.
+# price_out = 0.0          # An explicit $0 price is a real price (no unpriced marker).
+
+# Override a preset instead of adding a model (name must match the preset):
+# [[models]]
+# name = "gemini"
+# model = "gemini-2.5-pro"
+#
+# An Anthropic-compatible local endpoint (protocol anthropic):
+# [[models]]
+# name = "claude-proxy"
+# protocol = "anthropic"
+# endpoint = "http://127.0.0.1:4000"  # any base URL; the SDK normalizes it
+# model = "claude-sonnet-5"
+# context_window = 200000
+#
+# Claude through Bedrock:
+# [[models]]
+# name = "claude"
+# bedrock = true
+# region = "us-east-1"
+
+# One-shot equivalent of the vLLM entry above, from the command line:
+#   concord --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" findings.sarif
+
+# Names must match [a-z0-9-]. The judge/analyst persona names are reserved and
+# rejected at load: adjudicator, strict, business, codeflow.

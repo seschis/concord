@@ -21,7 +21,9 @@ and no usage reporting to any external service.
 
 - An on-demand, tool-calling code-reading agent that can read the finding's
   own repo (and optionally sibling repos) to judge exploitability.
-- A quad-model vote and adjudication (Claude, Gemini, Codex, Azure).
+- A quad-model vote and adjudication (Claude, Gemini, OpenAI, Azure), with
+  custom models (local vLLM and other OpenAI/Anthropic-compatible servers)
+  joining the vote from config.
 - Accept SARIF, JSON, CSV, Markdown, and XLSX as input.
 - Produce a Markdown report and a JSON results file, the latter carrying a
   `concordAnalysis` block per finding.
@@ -40,7 +42,7 @@ and no usage reporting to any external service.
 
 ## 3. Dependencies
 
-- `github.com/tmc/langchaingo` for the Gemini, Codex (OpenAI), and Azure
+- `github.com/tmc/langchaingo` for the Gemini, OpenAI, and Azure
   providers and their tool calling, via `llms/openai` (also covers Azure through
   `WithBaseURL` + `WithAPIVersion`) and `llms/googleai` / `llms/vertex`, plus
   `llms.Tool` / `llms.WithTools` and `ToolCall` / `ToolCallResponse` handling.
@@ -49,7 +51,9 @@ and no usage reporting to any external service.
   `provider.anthropicNativeModel`, implements langchaingo's `llms.Model` so the
   tool loop, single-shot, and adjudicate paths are provider-agnostic. This
   adapter is what makes prompt caching and per-model thinking translation
-  possible; langchaingo's `llms/anthropic` and `llms/bedrock` are no longer used.
+   possible; langchaingo's `llms/anthropic` and `llms/bedrock` are no longer used.
+- `github.com/BurntSushi/toml` for the `concord.toml` model config
+  (provider package only, strict-decoded).
 - `github.com/spf13/cobra` for the CLI.
 - `github.com/xuri/excelize/v2` for XLSX ingest.
 - `golang.org/x/sync/errgroup` for bounded fan-out.
@@ -63,11 +67,13 @@ langchaingo has no `create_agent`, no `deepagents` middleware, and no
 tracking, optional prompt caching), and JSON-structured output parsing are
 hand-rolled. This is more code but removes a large dependency surface.
 
-Provider-specific tuning knobs. Reasoning is wired, `--effort` maps to a Claude
-extended-thinking config and an OpenAI/Azure `reasoning_effort` on the
-single-shot paths (voters and adjudication); the agentic paths use effort for the
-tool-iteration budget instead, since multi-turn loops cannot round-trip Claude
-thinking blocks. For Claude the adapter classifies each model and emits the right
+Provider-specific tuning knobs. Reasoning is wired for Claude only: `--effort`
+maps to a Claude extended-thinking config on the single-shot paths (voters and
+adjudication). The openai and azure protocols send no reasoning-effort
+parameter — the pinned langchaingo v0.1.14 client has the mapping disabled, and
+a request-body test pins it — so `--effort` is a no-op there and on the agentic
+paths it only sets the tool-iteration budget, since multi-turn loops cannot
+round-trip Claude thinking blocks. For Claude the adapter classifies each model and emits the right
 API, `thinking:{type:"adaptive"}` + `output_config.effort` on current models,
 legacy `budget_tokens` on older ones, and nothing on models without extended
 thinking (also the safe default for unknown IDs). Anthropic prompt caching
@@ -87,9 +93,10 @@ concord/
       detect.go                   # dispatch on extension + content
       sarif.go json.go csv.go markdown.go xlsx.go
     provider/
-      provider.go                 # Provider interface, AnalyzeInput, registry
+      provider.go                 # Provider interface, AnalyzeInput
       base.go                     # LLMProvider base: single-shot/agentic/gather/adjudicate
-      constructors.go             # the 4 provider constructors (Claude/Gemini/Codex/Azure)
+      spec.go                     # ModelSpec, the 4 presets, NewFromSpec protocol factory
+      config.go                   # concord.toml: strict load, per-field merge, validation
       anthropic_native.go         # anthropic-sdk-go adapter: caching + thinking translation
       pricing.go                  # per-1M token cost tables (cache-aware) + cost()
     agent/
@@ -128,7 +135,7 @@ which.
 
 ```go
 type Provider interface {
-    Name() string          // "claude" | "gemini" | "codex" | "azure"
+    Name() string          // "claude" | "gemini" | "openai" | "azure" (or the spec's Name for custom models)
     Model() string
     Analyze(ctx context.Context, f finding.Finding, in AnalyzeInput) (triage.Result, error)
 }
@@ -140,14 +147,76 @@ type AnalyzeInput struct {
 }
 ```
 
+There are no per-vendor constructors anymore. A model is data, a `ModelSpec`,
+and `provider.NewFromSpec` is the single construction path for presets and
+custom servers alike.
+
+```go
+type ModelSpec struct {
+    Name          string   // voter identity: [a-z0-9-], not a persona name
+    Protocol      Protocol // openai | anthropic | gemini | azure
+    Endpoint      string   // openai root including /v1; anthropic base URL; empty = vendor default
+    APIKey        string   // literal or "env:NAME"; empty = the protocol's default credential env
+    Model         string
+    ContextWindow int      // required for custom specs (>= 4096); presets default to 128000
+    PriceIn       *float64 // USD per 1M tokens, set as a pair; wins over the built-in table
+    PriceOut      *float64
+    Bedrock       bool     // anthropic protocol only
+    Region        string   // anthropic protocol only (Bedrock region)
+    APIVersion    string   // azure protocol only
+}
+```
+
+The four built-in presets (`claude`, `gemini`, `openai`, `azure`) are spec
+values run through the same factory, so a presets-only run behaves exactly as
+before. Custom specs use the openai and anthropic protocols pointed at local or
+proxy servers (a vLLM server for openai is the usual case); gemini and azure
+are preset-only.
+
+Config layers merge per model name with precedence flag > file > preset: the
+preset specs (CLI flags and env), the `concord.toml` discovered in the working
+directory or the input file's directory (or `--config`), and the one-shot
+`--add-model "name,key=value,..."` flags. Decoding is strict (an unknown key
+or a duplicate name in one file is an error), and the merged set validates:
+name grammar, reserved persona names (`adjudicator`, `strict`, `business`,
+`codeflow`), a model id, `context_window >= 4096` (required for custom specs),
+and price pairs.
+
+Each spec then passes a per-protocol resolvability predicate (an explicit key
+or the protocol's env default; an explicit endpoint with no key resolvable
+anywhere is resolvable, and the factory constructs it with a placeholder token
+so keyless local servers work). Unresolvable specs become skip lines with a
+reason. Every resolvable spec votes, in preset-then-declaration order; the
+first voter is the preferred model (judge default, analyst base, and the
+shared-context gatherer).
+
+Two window behaviors ride on the spec's `context_window`. The output clamp:
+the effective max output per call is `min(--max-tokens, window/2)`, computed
+once and feeding every max-tokens site plus the explorer's 4000 cap. The
+pruner: each agentic loop derives its own pruner instance carrying that model's
+window (a shared run-scoped instance would be read concurrently by different
+models with different windows), so context pruning trims aggressively when the
+re-sent messages approach 80% of the window; the shared explorer receives one
+too when pruning is enabled.
+
+Pricing: an explicit `price_in`/`price_out` pair wins over the protocol's
+built-in rate card; a model in neither is unpriced, costs $0, and carries a
+visible marker in the stdout banner, the report (header note + per-model row),
+and the TUI. `results.json` `metadata.models` is a structured per-model list
+(`name`, `model`, `context_window`, `priced`).
+
 ### Provider mapping
 
 | Role | Go client | Tool calling | Notes |
 |---|---|---|---|
 | Claude | `anthropic-sdk-go` (direct + Bedrock) | yes | prompt caching + per-model thinking done in the adapter |
 | Gemini | langchaingo `llms/googleai` or `llms/vertex` | yes | `thinking_budget` passed but ignored by v0.1.14 |
-| Codex | langchaingo `llms/openai` | yes | direct GPT models via `reasoning_effort` |
-| Azure | langchaingo `llms/openai` + base URL / api version | yes | `reasoning_effort` exposure |
+| OpenAI | langchaingo `llms/openai` | yes | no reasoning-effort parameter (v0.1.14); `--effort` is a no-op |
+| Azure | langchaingo `llms/openai` + base URL / api version | yes | same; `--effort` is a no-op |
+
+The `codex` name is now `openai` (machine name, display label, report rows).
+`--codex-model`, `--codex-api-key`, and `--no-codex` remain deprecated aliases,
+and `--judge-model ...=codex` still resolves to the openai voter.
 
 ## 6. Context strategies (the key design decision)
 
@@ -348,7 +417,7 @@ rollup, and a JSON results file. Each finding in the JSON also carries a
 ```jsonc
 {
   "id": "F1", "file": "...", "final_verdict": "LIKELY_REAL",
-  "claude": {}, "gemini": {}, "codex": {}, "azure": {},
+  "claude": {}, "gemini": {}, "openai": {}, "azure": {},
   "agreement": "majority",
   "concordAnalysis": {
     "classification": "TRUE_POSITIVE",
@@ -376,11 +445,14 @@ Resolved per provider from environment variables (and CLI flags).
   required, and the model is a Bedrock/inference-profile ID via `--bedrock-model`.
 - Google (Gemini), `GOOGLE_API_KEY` or Vertex ADC via
   `GOOGLE_APPLICATION_CREDENTIALS`.
-- Codex, `OPENAI_API_KEY` for the direct backend, or AWS credentials for
-  Bedrock.
+- OpenAI, `OPENAI_API_KEY` (or `--openai-api-key`).
 - Azure OpenAI, key plus endpoint plus deployment.
+- Custom specs, an `api_key` as a literal or an `env:NAME` reference, else the
+  protocol's default credential environment. An explicit endpoint with no key
+  resolvable anywhere is still resolvable: the client is constructed with a
+  placeholder token, so keyless local servers work.
 
-A model whose credential is missing is skipped with a message, and the run
+A model whose credential cannot resolve is skipped with a reason, and the run
 proceeds with the remaining models. At least one model is required.
 
 ## 12. Distribution
@@ -412,7 +484,7 @@ goreleaser to GitHub releases.
 
 - Claude prompt caching and per-model thinking are resolved by moving Claude
   onto `anthropic-sdk-go` (the `anthropicNativeModel` adapter). Known gap:
-  langchaingo v0.1.14 (used for Gemini/Codex/Azure) ignores Gemini's
+   langchaingo v0.1.14 (used for Gemini/OpenAI/Azure) ignores Gemini's
   `thinking_budget`.
 - Whether the shared-strategy fallback when Claude is absent should be the
   deterministic gatherer (recommended) or a plain no-context run.

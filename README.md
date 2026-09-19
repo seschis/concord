@@ -22,7 +22,7 @@ flowchart TD
     B --> C{"Context strategy"}
     C -->|"shared (default)"| D["One explorer agent reads the repo<br/>and writes a shared brief"]
     C -->|"per-model"| E["Each model crawls the repo itself<br/>with sandboxed file tools"]
-    D --> F["Independent verdicts, each with a CVSS 4.0 score<br/>Claude, Gemini, Codex, Azure"]
+    D --> F["Independent verdicts, each with a CVSS 4.0 score<br/>Claude, Gemini, OpenAI, Azure"]
     E --> F
     F --> G{"Majority vote"}
     G -->|"category agreed"| H["Most conservative agreed verdict stands"]
@@ -37,8 +37,10 @@ A single model's verdict on a finding is unstable: it depends on the model, the
 prompt, and the order in which evidence was read. `concord` treats triage as an
 ensemble problem instead:
 
-- Up to four models (Claude, Gemini, Codex/direct OpenAI, Azure OpenAI) judge
-  each finding independently.
+- Up to four preset models (Claude, Gemini, OpenAI, Azure OpenAI) judge each
+  finding independently, and custom models — a local vLLM server being the
+  usual case — vote alongside them when configured (see
+  [Custom models (e.g. local vLLM)](#custom-models-eg-local-vllm)).
 - If two or more voters agree on a category (real, not-real, needs-more-context),
   the most conservative verdict in that category stands: when the vote splits,
   the finding is treated as more real, never as safe (`CONFIRMED_REAL` over
@@ -182,8 +184,8 @@ concord --srcroot /path/to/repo --context-strategy per-model -o ./out findings.s
 # Parse and normalize findings only, no model calls
 concord --dry-run findings.csv
 
-# The built-in demo: two findings against examples/sample-app
-concord --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif
+# The built-in demo: two findings against examples/sample-app, with analyst lenses
+concord --analyst strict --analyst business --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif
 ```
 
 Run `concord --help` for all flags.
@@ -317,12 +319,12 @@ context to cut explorer cost.
 
 ## Credentials
 
-Each provider is used only if its credential is present; missing ones are
-skipped, and at least one is required.
+Each model is used only if its credential resolves; unresolvable ones are
+skipped with a reason, and at least one model is required.
 
 - Claude, `ANTHROPIC_API_KEY` (or `--api-key`)
 - Gemini, `GOOGLE_API_KEY` (or `--google-api-key`)
-- Codex, `OPENAI_API_KEY` (or `--codex-api-key`)
+- OpenAI, `OPENAI_API_KEY` (or `--openai-api-key`)
 - Azure, `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` (or `--azure-*` flags)
 
 Claude can also run through Amazon Bedrock with `--bedrock` (auto-enabled when
@@ -331,6 +333,103 @@ through the AWS credential chain, a Bedrock API key in `AWS_BEARER_TOKEN_BEDROCK
 takes precedence, otherwise the SigV4 chain (`AWS_PROFILE` / SSO / env / IAM
 role). A region is required. The model is a Bedrock/inference-profile ID via
 `--bedrock-model`.
+
+## Custom models (e.g. local vLLM)
+
+The presets are data, not code. Every model is a `ModelSpec` — protocol,
+endpoint, model id, credentials, context window, price — built through one
+factory, so any model that speaks the **openai** or **anthropic** wire
+protocol (local vLLM servers are the usual case) can vote alongside the
+presets with no code change. `gemini` and `azure` are preset-only.
+
+Define a model in a standing `concord.toml`, or one-shot with `--add-model`.
+
+### concord.toml
+
+Concord looks for `concord.toml` in the working directory, then the input
+file's directory, unless `--config` points at one:
+
+```toml
+[[models]]
+name = "qwen"
+protocol = "openai"
+endpoint = "http://127.0.0.1:8000/v1"  # openai endpoint is the root including /v1
+model = "Qwen3.8-27B"
+context_window = 262144
+```
+
+A commented example covering the other keys lives in
+[examples/concord.example.toml](examples/concord.example.toml). Rules:
+
+- `name` must match `[a-z0-9-]`; the judge/analyst persona names
+  `adjudicator`, `strict`, `business`, and `codeflow` are reserved and
+  rejected at load.
+- `context_window` is required for custom models and must be at least 4096.
+- `price_in` / `price_out` (USD per 1M tokens) must be set together.
+- Unknown keys and duplicate names in one file are hard errors (the decode is
+  strict, so typos fail at load).
+
+A file entry can also *override a preset* by reusing its name. Fields merge
+per model with precedence **flag > file > preset**: `--add-model` overrides
+the file, which overrides the built-in preset.
+
+### One-shot `--add-model`
+
+The same vLLM model without a file:
+
+```bash
+concord --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" \
+  -o ./out findings.sarif
+```
+
+`--add-model "name,key=value,..."` is repeatable. Keys: `protocol`,
+`endpoint`, `api_key`, `model`, `context_window`, `price_in`, `price_out`,
+`bedrock`, `region`, `api_version`.
+
+### Semantics
+
+- **Endpoint.** An `openai` endpoint is the API root **including `/v1`** (the
+  client appends `/chat/completions`); an `anthropic` endpoint is any base URL
+  (the SDK normalizes it); an empty endpoint means the vendor default.
+- **api_key.** A literal key or `env:NAME`; omitted falls back to the
+  protocol's default credential environment. A keyless local endpoint — an
+  explicit `endpoint` with no key resolvable anywhere — still runs on a
+  placeholder token.
+- **context_window.** The effective max output per call is
+  `min(--max-tokens, window/2)`, and the agentic loop and the shared explorer
+  prune their re-sent context once it approaches the window.
+- **Pricing.** An explicit `price_in`/`price_out` pair wins over the built-in
+  rate card. A model with no price at all costs $0 and carries a visible
+  **unpriced** marker in the stdout banner (`Active models: ... (unpriced:
+  qwen)`), the report header (`**Unpriced models:** ...`) and its per-model
+  row (`(unpriced)`), and the TUI header. `results.json` `metadata.models` is
+  a structured list: `name`, `model`, `context_window`, `priced`.
+- **Voting.** Every resolvable model votes, in preset-then-declaration order;
+  the first voter is the preferred model (judge default, analyst base, and the
+  shared-context gatherer). `--no-model NAME` (repeatable) skips a model by
+  name.
+
+### Flag matrix
+
+| Flag | Meaning |
+|---|---|
+| `-m`, `--model` | Claude model id (the claude preset); unchanged by the codex→openai rename |
+| `--api-key` | Anthropic API key (else `ANTHROPIC_API_KEY`) |
+| `--claude-endpoint` | Anthropic-compatible endpoint URL |
+| `--gemini-model` / `--google-api-key` | gemini preset |
+| `--openai-model` / `--openai-api-key` / `--openai-endpoint` | openai preset |
+| `--azure-deployment` / `--azure-api-key` / `--azure-endpoint` / `--azure-api-version` | azure preset (unchanged) |
+| `--no-claude` / `--no-gemini` / `--no-openai` / `--no-azure` | skip a preset |
+| `--config` | model config file (else auto-discovered) |
+| `--add-model` | one-shot model spec (repeatable) |
+| `--no-model` | skip a model by name (repeatable) |
+
+### From `codex` to `openai`
+
+The `codex` name is now `openai`: the preset name, the flags above, and the
+report rows. `--codex-model`, `--codex-api-key`, and `--no-codex` still work
+as deprecated aliases (hidden from `--help`, they print a deprecation note
+when used), and `--judge-model ...=codex` still resolves to the openai voter.
 
 ## Status
 
