@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/seschis/concord/internal/triage"
@@ -19,7 +20,10 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 	b.WriteString("# Security Scan Triage Report\n\n")
 	fmt.Fprintf(&b, "**Date:** %s\n\n", meta.Date)
 	fmt.Fprintf(&b, "**Input file:** `%s`\n\n", meta.InputFile)
-	fmt.Fprintf(&b, "**Models:** %s\n\n", strings.Join(meta.Models, ", "))
+	fmt.Fprintf(&b, "**Models:** %s\n\n", strings.Join(DisplayNames(meta.Models), ", "))
+	if up := UnpricedNames(meta.Models); len(up) > 0 {
+		fmt.Fprintf(&b, "**Unpriced models:** %s (no price configured; costed at $0)\n\n", strings.Join(up, ", "))
+	}
 	if len(meta.Analysts) > 0 {
 		fmt.Fprintf(&b, "**Analysts:** %s\n\n", strings.Join(meta.Analysts, ", "))
 	}
@@ -110,10 +114,39 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 
 		// Per-model verdicts and cost breakdown.
 		b.WriteString("| Role | Verdict | Cost | Notes |\n|---|---|---|---|\n")
-		if r.ExplorerCostUSD > 0 {
+		// The explorer row renders whenever a gatherer ran — including an
+		// unpriced gatherer at $0. A shared strategy with a srcroot always
+		// gathers; a nonzero explorer cost implies it ran too.
+		gathererRan := r.ExplorerCostUSD > 0 || (meta.ContextStrategy == "shared" && meta.SrcRoot != "")
+		if gathererRan {
 			fmt.Fprintf(&b, "| explorer | — | $%.4f | shared context gathering |\n", r.ExplorerCostUSD)
 		}
-		for _, name := range []string{"claude", "gemini", "codex", "azure"} {
+		// Voter rows are data-driven over Meta.Models, in voter order.
+		voterNames := make([]string, 0, len(meta.Models))
+		for _, mi := range meta.Models {
+			voterNames = append(voterNames, mi.Name)
+		}
+		priced := make(map[string]bool, len(meta.Models))
+		for _, mi := range meta.Models {
+			priced[mi.Name] = mi.Priced
+		}
+		known := len(meta.Models) > 0
+		if !known {
+			// No structured model list (legacy callers): fall back to the
+			// observed result keys in sorted order so every voter still gets a
+			// row.
+			analyst := make(map[string]bool, len(meta.Analysts))
+			for _, a := range meta.Analysts {
+				analyst[a] = true
+			}
+			for name := range r.Results {
+				if !analyst[name] {
+					voterNames = append(voterNames, name)
+				}
+			}
+			sort.Strings(voterNames)
+		}
+		for _, name := range voterNames {
 			mr, ok := r.Results[name]
 			if !ok {
 				continue
@@ -122,7 +155,11 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 			if mr.Error != "" {
 				note = "error: " + mr.Error
 			}
-			fmt.Fprintf(&b, "| %s (voter) | %s | $%.4f | %s |\n", name, mr.FinalVerdict, mr.CostUSD, mdCell(note))
+			marker := ""
+			if known && !priced[name] {
+				marker = " (unpriced)"
+			}
+			fmt.Fprintf(&b, "| %s (voter) | %s | $%.4f%s | %s |\n", name, mr.FinalVerdict, mr.CostUSD, marker, mdCell(note))
 		}
 		// Analyst lenses (persona voters on the preferred model), if any.
 		for _, name := range meta.Analysts {

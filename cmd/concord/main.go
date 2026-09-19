@@ -62,7 +62,7 @@ type config struct {
 	// judges are the adjudication panel: each is a persona (built-in focus or a
 	// custom prompt file) on a model. judgeModels overrides a judge's model.
 	judges      []string // --judge: "name" or "name=/path/prompt.md" (repeatable)
-	judgeModels []string // --judge-model: "name=claude|gemini|codex|azure" (repeatable)
+	judgeModels []string // --judge-model: "name=<voter name>" (repeatable; codex is a deprecated alias of openai)
 
 	// analysts is the triage-analyzer panel: personas (built-in lens or a custom
 	// prompt file) that vote as extra analysts on the preferred model, so a
@@ -246,6 +246,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 	if err != nil {
 		return err
 	}
+	infos := modelInfos(voters)
 
 	// Use the live TUI on an interactive terminal unless --plain is set; a
 	// non-TTY stdout (pipe, redirect, CI) always gets plain line output.
@@ -278,7 +279,11 @@ func run(ctx context.Context, cfg *config, input string) error {
 		if configFile != "" {
 			fmt.Printf("Config: %s\n", configFile)
 		}
-		fmt.Printf("Active models: %s\n", strings.Join(names, ", "))
+		banner := "Active models: " + strings.Join(names, ", ")
+		if up := report.UnpricedNames(infos); len(up) > 0 {
+			banner += " (unpriced: " + strings.Join(up, ", ") + ")"
+		}
+		fmt.Println(banner)
 		switch {
 		case cfg.srcRoot == "":
 			fmt.Println("Context: none (metadata-only). Pass --srcroot to enable code reading.")
@@ -326,7 +331,8 @@ func run(ctx context.Context, cfg *config, input string) error {
 
 	if useTUI {
 		hdr := tui.Header{
-			InputFile: input, Models: names, Analysts: analystNames, Strategy: strategy.Name(),
+			InputFile: input, Models: names, Unpriced: report.UnpricedNames(infos),
+			Analysts: analystNames, Strategy: strategy.Name(),
 			SrcRoot: cfg.srcRoot, Effort: cfg.effort,
 			Context: contextRootLabels(contextRoots),
 		}
@@ -365,7 +371,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 		ContextDirs:     cfg.contextDirs,
 		ContextGuides:   discoveredGuides(cfg, contextRoots),
 		Effort:          cfg.effort,
-		Models:          names,
+		Models:          infos,
 		Analysts:        analystNames,
 		Judges:          judgeNames,
 		Total:           len(findings),
@@ -591,6 +597,22 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string
 		return nil, nil, skipReasons, fmt.Errorf("no models available; %s", strings.Join(skipReasons, "; "))
 	}
 	return voters, names, skipReasons, nil
+}
+
+// modelInfos snapshots each voter's identity for the structured report
+// metadata and the unpriced markers: name, model id, context window, and
+// priced flag, in voter order.
+func modelInfos(voters []provider.Provider) []report.ModelInfo {
+	infos := make([]report.ModelInfo, 0, len(voters))
+	for _, v := range voters {
+		info := report.ModelInfo{Name: v.Name(), Model: v.Model()}
+		if lp, ok := v.(*provider.LLMProvider); ok {
+			info.ContextWindow = lp.ContextWindow()
+			info.Priced = lp.Priced()
+		}
+		infos = append(infos, info)
+	}
+	return infos
 }
 
 // buildJudges assembles the adjudication panel from the --judge / --judge-model
