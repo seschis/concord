@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -187,5 +188,85 @@ func TestPrunerFromContextDefaultsToNoPrune(t *testing.T) {
 	ctx := WithPruner(context.Background(), NewBreadcrumbPruner())
 	if PrunerFrom(ctx).Name() != "breadcrumb" {
 		t.Fatalf("WithPruner not honored")
+	}
+}
+
+// windowPruner is the shared trim thresholds with a two-turn recent window so
+// buildHistory(4, 1200) leaves two stale results below the 1600-char floor.
+// The history holds 4902 chars (~1225 estimated tokens): past 80% of a 1500-
+// token window, under 80% of a 2000-token window.
+func windowPruner(window int) BreadcrumbPruner {
+	return BreadcrumbPruner{RecentWindow: 2, MinTrimChars: 1600, HeadChars: 600, Window: window}
+}
+
+func TestBreadcrumbWindowAwareTrimBelowMinTrimChars(t *testing.T) {
+	msgs := buildHistory(4, 1200)
+
+	// Under window pressure, stale results trim even though 1200 < MinTrimChars.
+	out := windowPruner(1500).Prune(msgs)
+	for i, r := range toolResults(out) {
+		trimmed := strings.Contains(r.Content, "elided to save context")
+		if i < 2 && !trimmed {
+			t.Errorf("old result %d should trim under window pressure even below MinTrimChars", i)
+		}
+		if i >= 2 && trimmed {
+			t.Errorf("recent result %d should stay full", i)
+		}
+	}
+
+	// Window 0: today's exact behavior — nothing below the floor is trimmed.
+	body := strings.Repeat("x", 1200)
+	for i, r := range toolResults(windowPruner(0).Prune(msgs)) {
+		if r.Content != body {
+			t.Errorf("window-blind prune must keep result %d byte-identical", i)
+		}
+	}
+
+	// Window set but usage under 80%: the pressure gate keeps the floor in force.
+	for i, r := range toolResults(windowPruner(2000).Prune(msgs)) {
+		if r.Content != body {
+			t.Errorf("under the 80%% pressure threshold result %d must stay full", i)
+		}
+	}
+}
+
+func TestBreadcrumbWindowPressureBoundary(t *testing.T) {
+	// A single tool result of exactly 4000 chars is 1000 estimated tokens.
+	toolMsgs := func(chars int) []llms.MessageContent {
+		return []llms.MessageContent{{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+			llms.ToolCallResponse{ToolCallID: "a", Name: "read_file", Content: strings.Repeat("x", chars)},
+		}}}
+	}
+
+	// Exactly 80% does not exceed the threshold: 1000 tokens vs 0.8*1250 = 1000.
+	at := BreadcrumbPruner{Window: 1250}
+	if at.overWindow(toolMsgs(4000)) {
+		t.Errorf("usage exactly at 80%% of the window must not count as over")
+	}
+	// Four more chars cross the threshold.
+	if !at.overWindow(toolMsgs(4004)) {
+		t.Errorf("usage just past 80%% of the window must count as over")
+	}
+	// A zero window is window-blind: never over, however large the history.
+	var zero BreadcrumbPruner
+	if zero.overWindow(toolMsgs(4004)) {
+		t.Errorf("Window 0 must never report window pressure")
+	}
+}
+
+func TestBreadcrumbWithWindowReturnsAnIndependentCopy(t *testing.T) {
+	shared := NewBreadcrumbPruner() // window-blind, as a run-scoped instance is
+	derived := shared.WithWindow(8192)
+	bp, ok := derived.(BreadcrumbPruner)
+	if !ok || bp.Window != 8192 {
+		t.Fatalf("WithWindow must return the pruner carrying window 8192, got %T", derived)
+	}
+	if shared.Window != 0 {
+		t.Errorf("deriving a per-loop instance must not mutate the shared one; Window=%d", shared.Window)
+	}
+	// Under no pressure the derived copy behaves exactly like the shared one.
+	in := buildHistory(10, 200)
+	if !reflect.DeepEqual(shared.Prune(in), derived.Prune(in)) {
+		t.Errorf("unpressured windowed copy must prune identically to the window-blind original")
 	}
 }

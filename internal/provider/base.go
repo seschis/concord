@@ -33,9 +33,9 @@ type LLMProvider struct {
 	// Analyze paths. Analyst voters set it to a persona-lens prompt (see
 	// NewAnalyst); ordinary model providers leave it empty.
 	system string
-	// contextWindow is the model's context window in tokens (0 = unknown). A
-	// later unit clamps the output budget against it; this unit only carries
-	// the value.
+	// contextWindow is the model's context window in tokens (0 = unknown).
+	// It clamps the per-call output budget to half the window (input + output
+	// must fit the window) and feeds the window-aware pruner in tool loops.
 	contextWindow int
 	// priced is true when the model has an explicit spec price or a built-in
 	// table price (KTD9); unpriced models cost $0 and get a visible marker.
@@ -50,6 +50,33 @@ func (p *LLMProvider) ContextWindow() int { return p.contextWindow }
 
 // Priced reports whether the model has an explicit or built-in-table price.
 func (p *LLMProvider) Priced() bool { return p.priced }
+
+// effectiveMaxTokens is the per-call output budget: the global max-tokens
+// budget clamped to half the model's context window, so output can never
+// consume more than half the window a single input+output exchange needs.
+// An unknown window (0) leaves the budget unclamped; the clamp never raises
+// the budget above --max-tokens. Presets default to a 128000 window, so with
+// the default 16000 budget the clamp is a no-op and presets-only requests are
+// byte-identical to before.
+func (p *LLMProvider) effectiveMaxTokens() int {
+	if p.contextWindow > 0 {
+		if half := p.contextWindow / 2; half < p.maxTokens {
+			return half
+		}
+	}
+	return p.maxTokens
+}
+
+// explorerMaxTokens is the explorer's output budget: the fixed 4000 cap,
+// clamped to half the model's context window when that is smaller.
+func (p *LLMProvider) explorerMaxTokens() int {
+	if p.contextWindow > 0 {
+		if half := p.contextWindow / 2; half < explorerMaxTokens {
+			return half
+		}
+	}
+	return explorerMaxTokens
+}
 
 // systemPrompt returns the system prompt for the Analyze paths: the persona-lens
 // override when present, else the shared triage prompt.
@@ -72,7 +99,7 @@ func (p *LLMProvider) Analyze(ctx context.Context, f finding.Finding, in Analyze
 		llms.TextParts(llms.ChatMessageTypeHuman, user),
 	}
 
-	opts := []llms.CallOption{llms.WithModel(p.model), llms.WithMaxTokens(p.maxTokens)}
+	opts := []llms.CallOption{llms.WithModel(p.model), llms.WithMaxTokens(p.effectiveMaxTokens())}
 	opts = append(opts, thinkingOpts(in.Effort)...)
 
 	sink := progress.From(ctx)
@@ -134,9 +161,9 @@ func (p *LLMProvider) analyzeAgentic(ctx context.Context, f finding.Finding, in 
 	start := time.Now()
 	lr, err := agent.RunToolLoop(ctx, agent.LoopOptions{
 		Model: p.llm, ModelName: p.model, System: p.systemPrompt(), User: user,
-		Tools: tb.Definitions(), Exec: tb.Exec, MaxIters: maxIters, MaxTokens: p.maxTokens,
+		Tools: tb.Definitions(), Exec: tb.Exec, MaxIters: maxIters, MaxTokens: p.effectiveMaxTokens(),
 		OnStep: p.stepReporter(ctx, sink, progress.RoleVoter, f.ID),
-		Pruner: agent.PrunerFrom(ctx),
+		Pruner: agent.PrunerFrom(ctx), ContextWindow: p.contextWindow,
 	})
 	elapsed := time.Since(start).Seconds()
 	if err != nil {
@@ -166,8 +193,9 @@ func (p *LLMProvider) Gather(ctx context.Context, f finding.Finding, srcRoot str
 	lr, err := agent.RunToolLoop(ctx, agent.LoopOptions{
 		Model: p.llm, ModelName: p.model, System: triage.ExplorerPrompt, User: user,
 		Tools: tb.Definitions(), Exec: tb.Exec,
-		MaxIters: agent.MaxItersForEffort(effort), MaxTokens: explorerMaxTokens,
+		MaxIters: agent.MaxItersForEffort(effort), MaxTokens: p.explorerMaxTokens(),
 		OnStep: p.stepReporter(ctx, sink, progress.RoleExplorer, f.ID),
+		Pruner: agent.PrunerFrom(ctx), ContextWindow: p.contextWindow,
 	})
 	cost := p.cost(p.model, lr.InputTokens, lr.OutputTokens, lr.CacheWriteTokens, lr.CacheReadTokens)
 	verdict := "context ready"
@@ -189,7 +217,7 @@ func (p *LLMProvider) AdjudicateAs(ctx context.Context, f finding.Finding, resul
 		llms.TextParts(llms.ChatMessageTypeSystem, system),
 		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
 	}
-	opts := []llms.CallOption{llms.WithModel(p.model), llms.WithMaxTokens(p.maxTokens)}
+	opts := []llms.CallOption{llms.WithModel(p.model), llms.WithMaxTokens(p.effectiveMaxTokens())}
 	opts = append(opts, thinkingOpts(effort)...)
 
 	sink := progress.From(ctx)
