@@ -12,16 +12,15 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
-// TestNewFromSpecPresets is the preset-equivalence gate: each preset built
-// from its spec value must be observably identical to the legacy constructor
-// it replaces — same Name, Model, and cost behavior (the openai name is the
-// one sanctioned rename) — and carry the 128000 default context window.
+// TestNewFromSpecPresets is the preset gate: each preset built from its spec
+// value carries the right name, model id, and the 128000 default context
+// window, and prices off the protocol's built-in table (the openai name is
+// the one sanctioned rename).
 func TestNewFromSpecPresets(t *testing.T) {
 	clearCredentialEnvs(t)
-	// The openai and gemini presets only construct when a key resolves (the
-	// legacy constructors error identically without one), so give each its
-	// protocol default env key; claude constructs keyless (lazy SDK sentinel)
-	// and azure takes its key/endpoint env vars, exactly as cmd resolves them.
+	// The openai and gemini presets only construct when a key resolves, so
+	// give each its protocol default env key; claude constructs keyless (lazy
+	// SDK credential) and azure takes its key/endpoint env vars.
 	t.Setenv("OPENAI_API_KEY", "openai-key")
 	t.Setenv("GOOGLE_API_KEY", "gemini-key")
 	t.Setenv("AZURE_OPENAI_API_KEY", "azure-key")
@@ -29,37 +28,30 @@ func TestNewFromSpecPresets(t *testing.T) {
 
 	cases := []struct {
 		spec   ModelSpec
-		legacy func() (*LLMProvider, error)
 		name   string
 		model  string
 		inCost float64
 	}{
 		{
 			spec:   PresetClaude,
-			legacy: func() (*LLMProvider, error) { return NewClaude("", "claude-opus-5", 100) },
 			name:   "claude",
 			model:  "claude-opus-5",
 			inCost: 5.0, // claudePricing "claude-opus-5": input $5/M
 		},
 		{
 			spec:   PresetGemini,
-			legacy: func() (*LLMProvider, error) { return NewGemini(context.Background(), "", "gemini-2.5-flash", 100) },
 			name:   "gemini",
 			model:  "gemini-2.5-flash",
 			inCost: 0.30, // geminiPricing "gemini-2.5-flash": input $0.30/M
 		},
 		{
 			spec:   PresetOpenAI,
-			legacy: func() (*LLMProvider, error) { return NewCodex("", "gpt-5.6-sol", 100) },
 			name:   "openai",
 			model:  "gpt-5.6-sol",
 			inCost: 4.0, // openaiPricing "gpt-5.6-sol": input $4/M
 		},
 		{
-			spec: PresetAzure,
-			legacy: func() (*LLMProvider, error) {
-				return NewAzure("azure-key", "https://res.openai.azure.com", "2024-12-01-preview", "gpt-5.5", 100)
-			},
+			spec:   PresetAzure,
 			name:   "azure",
 			model:  "gpt-5.5",
 			inCost: 4.0, // azurePricing "gpt-5.5": input $4/M
@@ -70,10 +62,6 @@ func TestNewFromSpecPresets(t *testing.T) {
 			got, err := NewFromSpec(c.spec, 100)
 			if err != nil {
 				t.Fatalf("NewFromSpec(%q): %v", c.spec.Protocol, err)
-			}
-			leg, err := c.legacy()
-			if err != nil {
-				t.Fatalf("legacy constructor: %v", err)
 			}
 
 			if got.Name() != c.name {
@@ -89,25 +77,8 @@ func TestNewFromSpecPresets(t *testing.T) {
 				t.Error("Priced() = false, want true (preset model ids match the built-in tables)")
 			}
 
-			if leg.Name() != got.Name() || leg.Model() != got.Model() {
-				t.Errorf("factory %q/%q diverges from legacy %q/%q", got.Name(), got.Model(), leg.Name(), leg.Model())
-			}
-
-			// Cost behavior must be identical to the legacy constructor,
-			// including the cache-token buckets.
-			tokens := [][4]int{
-				{1_000_000, 0, 0, 0},
-				{0, 1_000_000, 0, 0},
-				{1_000_000, 1_000_000, 0, 0},
-				{1_000_000, 1_000_000, 1_000_000, 1_000_000},
-			}
-			for _, tk := range tokens {
-				g := got.cost(got.model, tk[0], tk[1], tk[2], tk[3])
-				l := leg.cost(leg.model, tk[0], tk[1], tk[2], tk[3])
-				if g != l {
-					t.Errorf("cost(%v) = %v, want legacy %v", tk, g, l)
-				}
-			}
+			// The built-in table must price every token bucket, including the
+			// cache-token terms.
 			if got := got.cost(got.model, 1_000_000, 0, 0, 0); got != c.inCost {
 				t.Errorf("1M input cost = %v, want %v", got, c.inCost)
 			}

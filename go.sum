@@ -16,6 +16,8 @@ cloud.google.com/go/longrunning v0.6.2 h1:xjDfh1pQcWPEvnfjZmwjKQEcHnpz6lHjfy7Fo0
 cloud.google.com/go/longrunning v0.6.2/go.mod h1:k/vIs83RN4bE3YCswdXC5PFfWVILjm3hpEUlSko4PiI=
 cloud.google.com/go/vertexai v0.12.0 h1:zTadEo/CtsoyRXNx3uGCncoWAP1H2HakGqwznt+iMo8=
 cloud.google.com/go/vertexai v0.12.0/go.mod h1:8u+d0TsvBfAAd2x5R6GMgbYhsLgo3J7lmP4bR8g2ig8=
+github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
+github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/anthropics/anthropic-sdk-go v1.67.0 h1:tTsVSR+YD6R+1EPoMyZ9im7YKEjJpYGZk5klcDi9HRg=
 github.com/anthropics/anthropic-sdk-go v1.67.0/go.mod h1:3EfIfmFqxH6rbiLcIP4tPFyXL/IHakx2wDG4OU+TIEI=
 github.com/aws/aws-sdk-go-v2 v1.43.8 h1:fpnrxwuwsoGIgjvgLeDU3y9w7YaHBxyF6AF3vQL8duw=

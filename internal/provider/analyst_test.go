@@ -10,9 +10,11 @@ import (
 // NewAnalyst must inherit the base provider's model and pricing while taking a
 // distinct label and a persona-lens system prompt (so it votes as its own voter).
 func TestNewAnalyst(t *testing.T) {
-	base, err := NewClaude("", "claude-fake", 100)
+	base, err := NewFromSpec(ModelSpec{
+		Name: "claude", Protocol: ProtocolAnthropic, Model: "claude-fake", ContextWindow: 128000,
+	}, 100)
 	if err != nil {
-		t.Fatalf("NewClaude should build without a key: %v", err)
+		t.Fatalf("NewFromSpec should build without a key (lazy SDK credential): %v", err)
 	}
 
 	a := NewAnalyst(base, "strict", "a skeptical, evidence-first lens")
@@ -45,9 +47,11 @@ func TestNewAnalyst(t *testing.T) {
 
 // A plain model provider (no lens) keeps the default triage prompt.
 func TestPlainProviderUsesDefaultSystemPrompt(t *testing.T) {
-	base, err := NewClaude("", "claude-fake", 100)
+	base, err := NewFromSpec(ModelSpec{
+		Name: "claude", Protocol: ProtocolAnthropic, Model: "claude-fake", ContextWindow: 128000,
+	}, 100)
 	if err != nil {
-		t.Fatalf("NewClaude: %v", err)
+		t.Fatalf("NewFromSpec: %v", err)
 	}
 	if base.system != "" {
 		t.Fatalf("a plain provider must not carry a system override")
