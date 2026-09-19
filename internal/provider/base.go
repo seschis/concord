@@ -33,10 +33,23 @@ type LLMProvider struct {
 	// Analyze paths. Analyst voters set it to a persona-lens prompt (see
 	// NewAnalyst); ordinary model providers leave it empty.
 	system string
+	// contextWindow is the model's context window in tokens (0 = unknown). A
+	// later unit clamps the output budget against it; this unit only carries
+	// the value.
+	contextWindow int
+	// priced is true when the model has an explicit spec price or a built-in
+	// table price (KTD9); unpriced models cost $0 and get a visible marker.
+	priced bool
 }
 
 func (p *LLMProvider) Name() string  { return p.name }
 func (p *LLMProvider) Model() string { return p.model }
+
+// ContextWindow returns the model's context window in tokens (0 = unknown).
+func (p *LLMProvider) ContextWindow() int { return p.contextWindow }
+
+// Priced reports whether the model has an explicit or built-in-table price.
+func (p *LLMProvider) Priced() bool { return p.priced }
 
 // systemPrompt returns the system prompt for the Analyze paths: the persona-lens
 // override when present, else the shared triage prompt.

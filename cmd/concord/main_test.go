@@ -68,10 +68,10 @@ func TestBuildJudgesSkipsUnknownAndAppliesModelOverride(t *testing.T) {
 	voters := []provider.Provider{claude, codex}
 
 	// "nope" is not a built-in persona and has no file -> skipped. "strict" uses
-	// the default model; "business" is overridden to codex.
+	// the default model; "business" is overridden to the openai voter.
 	judges, names := buildJudges(voters, &config{
 		judges:      []string{"nope", "strict", "business"},
-		judgeModels: []string{"business=codex"},
+		judgeModels: []string{"business=openai"},
 	})
 	if len(judges) != 2 {
 		t.Fatalf("want 2 judges (unknown skipped), got %d: %v", len(judges), names)
@@ -83,7 +83,7 @@ func TestBuildJudgesSkipsUnknownAndAppliesModelOverride(t *testing.T) {
 		t.Fatalf("strict should use the default model, got %q", judges[0].Model())
 	}
 	if judges[1].Model() != "gpt-fake" {
-		t.Fatalf("business should be overridden to codex (gpt-fake), got %q", judges[1].Model())
+		t.Fatalf("business should be overridden to the openai voter (gpt-fake), got %q", judges[1].Model())
 	}
 }
 

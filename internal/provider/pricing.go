@@ -38,8 +38,9 @@ var geminiPricing = map[string]pricePer1M{
 	"gemini-1.5-flash": {0.075, 0.30},
 }
 
-// codexPricing mirrors CODEX_PRICING in the Python tool.
-var codexPricing = map[string]pricePer1M{
+// openaiPricing mirrors CODEX_PRICING in the Python tool (the table keys are
+// real model ids and stay put through the codex→openai rename).
+var openaiPricing = map[string]pricePer1M{
 	"gpt-5.6-sol":         {4.0, 20.0},
 	"gpt-5.6":             {4.0, 20.0},
 	"gpt-5.5":             {4.0, 20.0},
@@ -192,8 +193,8 @@ func costGemini(model string, inTok, outTok, cacheWrite, cacheRead int) float64 
 	return costFrom(geminiPricing, model, inTok, outTok, cacheWrite, cacheRead)
 }
 
-func costCodex(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {
-	return costFrom(codexPricing, model, inTok, outTok, cacheWrite, cacheRead)
+func costOpenAI(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {
+	return costFrom(openaiPricing, model, inTok, outTok, cacheWrite, cacheRead)
 }
 
 func costAzure(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {
