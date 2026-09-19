@@ -3,6 +3,7 @@ module github.com/seschis/concord
 go 1.26.2
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/anthropics/anthropic-sdk-go v1.67.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.39
 	github.com/charmbracelet/bubbles v0.20.0
