@@ -136,7 +136,7 @@ func anthropicEnvKey() string {
 }
 
 // Resolvable reports whether the spec's credentials can resolve for its
-// protocol, and a skip reason when they cannot (KTD5). A later unit calls it
+// protocol, and a skip reason when they cannot. The cmd layer calls it
 // per spec to turn unresolvable models into skip lines instead of per-finding
 // error stubs. An explicit endpoint with no key anywhere is resolvable: the
 // factory constructs it with a placeholder token so local servers that take
@@ -287,7 +287,7 @@ func NewFromSpec(spec ModelSpec, maxTokens int) (*LLMProvider, error) {
 		return nil, fmt.Errorf("unknown protocol %q", spec.Protocol)
 	}
 
-	// KTD9: priced is true when an explicit spec price is set or the model id
+	// priced is true when an explicit spec price is set or the model id
 	// matches the protocol's built-in table (anthropic consults the Bedrock
 	// table when bedrock). An explicit price (both fields) wins over the
 	// table in the cost function.

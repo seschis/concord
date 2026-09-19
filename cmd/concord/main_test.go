@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/seschis/concord/internal/provider"
+	"github.com/seschis/concord/internal/report"
 )
 
 // clearCredentialEnvs blanks every credential environment variable the spec
@@ -298,26 +299,18 @@ func writeConfig(t *testing.T, content string) string {
 
 // TestResolveSpecsSkipReporting is the no-credentials scenario: the keyless
 // vLLM spec resolves via a placeholder token and becomes the only voter, while
-// every preset is skipped with a per-spec reason.
+// every preset is skipped (with a printed per-spec reason).
 func TestResolveSpecsSkipReporting(t *testing.T) {
 	clearCredentialEnvs(t)
 	path := writeConfig(t, vllmSpecTOML)
 
-	voters, names, skipReasons, err := resolveSpecs(&config{maxTokens: 100}, path)
+	voters, err := resolveSpecs(&config{maxTokens: 100}, path)
 	if err != nil {
 		t.Fatalf("the keyless vLLM spec should resolve via a placeholder token: %v", err)
 	}
-	if len(voters) != 1 || names[0] != "qwen (Qwen3.8-27B)" {
+	names := report.DisplayNames(modelInfos(voters))
+	if len(voters) != 1 || len(names) != 1 || names[0] != "qwen (Qwen3.8-27B)" {
 		t.Fatalf("want only qwen as voter, got %v", names)
-	}
-	byName := map[string]bool{}
-	for _, r := range skipReasons {
-		byName[strings.SplitN(r, ":", 2)[0]] = true
-	}
-	for _, name := range []string{"claude", "gemini", "openai", "azure"} {
-		if !byName[name] {
-			t.Errorf("skip reasons should include %s with a reason, got %v", name, skipReasons)
-		}
 	}
 }
 
@@ -326,12 +319,18 @@ func TestResolveSpecsSkipReporting(t *testing.T) {
 func TestResolveSpecsZeroResolvable(t *testing.T) {
 	clearCredentialEnvs(t)
 
-	voters, _, _, err := resolveSpecs(&config{maxTokens: 100}, "")
+	voters, err := resolveSpecs(&config{maxTokens: 100}, "")
 	if err == nil {
 		t.Fatal("want an error when no spec resolves")
 	}
 	if len(voters) != 0 {
 		t.Fatalf("want no voters, got %d", len(voters))
+	}
+	// The error lists every skip reason, one per preset.
+	for _, name := range []string{"claude", "gemini", "openai", "azure"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("zero-models error should name %s with a reason: %v", name, err)
+		}
 	}
 	for _, name := range []string{"claude:", "gemini:", "openai:", "azure:"} {
 		if !strings.Contains(err.Error(), name) {
@@ -366,10 +365,11 @@ endpoint = "http://127.0.0.1:8002/v1"
 model = "m2"
 context_window = 16384
 `)
-	voters, names, _, err := resolveSpecs(&config{maxTokens: 100}, path)
+	voters, err := resolveSpecs(&config{maxTokens: 100}, path)
 	if err != nil {
 		t.Fatalf("resolveSpecs: %v", err)
 	}
+	names := report.DisplayNames(modelInfos(voters))
 	want := []string{"claude (", "gemini (", "openai (", "azure (", "spec1 (m1)", "spec2 (m2)"}
 	if len(names) != len(want) {
 		t.Fatalf("want %d voters %v, got %v", len(want), want, names)
@@ -411,11 +411,11 @@ context_window = 16384
 `)
 	namesOf := func(t *testing.T, cfg *config) []string {
 		t.Helper()
-		_, names, _, err := resolveSpecs(cfg, path)
+		voters, err := resolveSpecs(cfg, path)
 		if err != nil {
 			t.Fatalf("resolveSpecs: %v", err)
 		}
-		return names
+		return report.DisplayNames(modelInfos(voters))
 	}
 	hasName := func(names []string, prefix string) bool {
 		for _, n := range names {
@@ -464,10 +464,11 @@ func TestResolveSpecsAddModel(t *testing.T) {
 			"claude,model=claude-sonnet-4-5",
 		},
 	}
-	voters, names, _, err := resolveSpecs(cfg, "")
+	voters, err := resolveSpecs(cfg, "")
 	if err != nil {
 		t.Fatalf("resolveSpecs: %v", err)
 	}
+	names := report.DisplayNames(modelInfos(voters))
 	if len(voters) != 2 {
 		t.Fatalf("want claude + qwen voters, got %v", names)
 	}

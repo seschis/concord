@@ -57,6 +57,22 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 	}
 	b.WriteString("\n---\n\n")
 
+	// Meta-derived voter state, computed once for every finding.
+	voterNames := make([]string, 0, len(meta.Models))
+	for _, mi := range meta.Models {
+		voterNames = append(voterNames, mi.Name)
+	}
+	priced := make(map[string]bool, len(meta.Models))
+	for _, mi := range meta.Models {
+		priced[mi.Name] = mi.Priced
+	}
+	known := len(meta.Models) > 0
+	analyst := make(map[string]bool, len(meta.Analysts))
+	for _, a := range meta.Analysts {
+		analyst[a] = true
+	}
+	sharedGatherer := meta.ContextStrategy == "shared" && meta.SrcRoot != ""
+
 	// Per-finding detail.
 	for _, r := range results {
 		primary := pickPrimary(r.Results, triage.Verdict(r.FinalVerdict))
@@ -117,36 +133,24 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 		// The explorer row renders whenever a gatherer ran — including an
 		// unpriced gatherer at $0. A shared strategy with a srcroot always
 		// gathers; a nonzero explorer cost implies it ran too.
-		gathererRan := r.ExplorerCostUSD > 0 || (meta.ContextStrategy == "shared" && meta.SrcRoot != "")
-		if gathererRan {
+		if r.ExplorerCostUSD > 0 || sharedGatherer {
 			fmt.Fprintf(&b, "| explorer | — | $%.4f | shared context gathering |\n", r.ExplorerCostUSD)
 		}
-		// Voter rows are data-driven over Meta.Models, in voter order.
-		voterNames := make([]string, 0, len(meta.Models))
-		for _, mi := range meta.Models {
-			voterNames = append(voterNames, mi.Name)
-		}
-		priced := make(map[string]bool, len(meta.Models))
-		for _, mi := range meta.Models {
-			priced[mi.Name] = mi.Priced
-		}
-		known := len(meta.Models) > 0
+		rows := voterNames
 		if !known {
 			// No structured model list (legacy callers): fall back to the
 			// observed result keys in sorted order so every voter still gets a
 			// row.
-			analyst := make(map[string]bool, len(meta.Analysts))
-			for _, a := range meta.Analysts {
-				analyst[a] = true
-			}
+			rows = make([]string, 0, len(voterNames)+len(r.Results))
+			rows = append(rows, voterNames...)
 			for name := range r.Results {
 				if !analyst[name] {
-					voterNames = append(voterNames, name)
+					rows = append(rows, name)
 				}
 			}
-			sort.Strings(voterNames)
+			sort.Strings(rows)
 		}
-		for _, name := range voterNames {
+		for _, name := range rows {
 			mr, ok := r.Results[name]
 			if !ok {
 				continue

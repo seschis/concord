@@ -341,7 +341,7 @@ func TestExplicitZeroPricePricedNoMarker(t *testing.T) {
 	}
 }
 
-// metadata.models serializes as a structured per-model list (R16): name, model
+// metadata.models serializes as a structured per-model list: name, model
 // id, context window, and priced flag for every configured voter, in order.
 func TestMetaModelsStructuredJSON(t *testing.T) {
 	meta := Meta{

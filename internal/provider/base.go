@@ -38,7 +38,7 @@ type LLMProvider struct {
 	// must fit the window) and feeds the window-aware pruner in tool loops.
 	contextWindow int
 	// priced is true when the model has an explicit spec price or a built-in
-	// table price (KTD9); unpriced models cost $0 and get a visible marker.
+	// table price; unpriced models cost $0 and get a visible marker.
 	priced bool
 }
 
@@ -58,24 +58,26 @@ func (p *LLMProvider) Priced() bool { return p.priced }
 // the budget above --max-tokens. Presets default to a 128000 window, so with
 // the default 16000 budget the clamp is a no-op and presets-only requests are
 // byte-identical to before.
-func (p *LLMProvider) effectiveMaxTokens() int {
+// clampToHalfWindow caps budget at half the model's context window; an
+// unknown window (0) leaves the budget untouched and the clamp never raises
+// it.
+func (p *LLMProvider) clampToHalfWindow(budget int) int {
 	if p.contextWindow > 0 {
-		if half := p.contextWindow / 2; half < p.maxTokens {
+		if half := p.contextWindow / 2; half < budget {
 			return half
 		}
 	}
-	return p.maxTokens
+	return budget
+}
+
+func (p *LLMProvider) effectiveMaxTokens() int {
+	return p.clampToHalfWindow(p.maxTokens)
 }
 
 // explorerMaxTokens is the explorer's output budget: the fixed 4000 cap,
 // clamped to half the model's context window when that is smaller.
 func (p *LLMProvider) explorerMaxTokens() int {
-	if p.contextWindow > 0 {
-		if half := p.contextWindow / 2; half < explorerMaxTokens {
-			return half
-		}
-	}
-	return explorerMaxTokens
+	return p.clampToHalfWindow(explorerMaxTokens)
 }
 
 // systemPrompt returns the system prompt for the Analyze paths: the persona-lens

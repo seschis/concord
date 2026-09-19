@@ -42,8 +42,11 @@ func TestPresetSpecs(t *testing.T) {
 			if c.spec.ContextWindow != 128000 {
 				t.Errorf("ContextWindow = %d, want 128000", c.spec.ContextWindow)
 			}
-			if c.spec.PriceIn != nil || c.spec.PriceOut != nil {
-				t.Errorf("presets must carry no explicit price, got %v/%v", *c.spec.PriceIn, *c.spec.PriceOut)
+			if c.spec.PriceIn != nil {
+				t.Errorf("presets must carry no explicit price, got PriceIn %v", *c.spec.PriceIn)
+			}
+			if c.spec.PriceOut != nil {
+				t.Errorf("presets must carry no explicit price, got PriceOut %v", *c.spec.PriceOut)
 			}
 		})
 	}

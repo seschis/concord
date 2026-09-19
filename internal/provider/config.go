@@ -154,7 +154,7 @@ func MergeSpecs(layers ...[]ModelSpec) []ModelSpec {
 var specNamePattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 // ValidateSpecs checks every merged spec: name grammar, reserved persona
-// names (KTD10), protocol, model id, context window (>= 4096 for all, present
+// names, protocol, model id, context window (>= 4096 for all, present
 // for custom specs), and the price pair. presetNames names the specs the
 // preset layer supplied; every other spec is custom and must carry its own
 // context window. Unknown keys are a decode error (LoadTOML), not a
@@ -204,13 +204,9 @@ func validateSpec(s ModelSpec, isPreset bool) error {
 
 // reservedModelName reports whether the name collides with a judge/analyst
 // persona. Results are keyed by provider name; a model named like a persona
-// would silently collide with its results row (KTD10). The set comes from
-// triage so it stays in sync with the built-in personas.
+// would silently collide with its results row. FocusFor's persona map is the
+// source of truth, so the check stays in sync with the built-in personas.
 func reservedModelName(name string) bool {
-	for _, n := range triage.BuiltInPersonaNames() {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	_, ok := triage.FocusFor(name)
+	return ok
 }

@@ -187,9 +187,9 @@ func TestNewFromSpecBedrock(t *testing.T) {
 	}
 }
 
-// TestNewFromSpecPricing covers the KTD9 signal and the R14 precedence: an
-// explicit spec price (even 0.0/0.0) wins over the table, a table match is
-// priced, and neither is unpriced at $0.
+// TestNewFromSpecPricing covers the pricing precedence: an explicit spec
+// price (even 0.0/0.0) wins over the table, a table match is priced, and
+// neither is unpriced at $0.
 func TestNewFromSpecPricing(t *testing.T) {
 	clearCredentialEnvs(t)
 
@@ -254,7 +254,7 @@ func TestNewFromSpecPricing(t *testing.T) {
 	}
 }
 
-// TestOpenAIRequestBodyPin is the KTD8 pin: the pinned langchaingo version's
+// TestOpenAIRequestBodyPin pins the pinned langchaingo version's
 // openai client must send max_completion_tokens and must NOT send a
 // reasoning_effort key, even when a thinking/effort option is requested. The
 // factory-built client (endpoint = the httptest server) is driven with one

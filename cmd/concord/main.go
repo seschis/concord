@@ -122,7 +122,7 @@ func newRootCmd(cfg *config) *cobra.Command {
 	f.StringVar(&cfg.configFile, "config", "",
 		"model config file (concord.toml with [[models]] entries); discovered automatically when unset: concord.toml in the working directory, then the input file's directory")
 	f.StringArrayVar(&cfg.addModels, "add-model", nil,
-		"one-shot model spec 'name,key=value,...' (repeatable; per-field precedence flag > file > preset). Keys: protocol, endpoint, api_key, model, context_window, price_in, price_out, bedrock, region, api_version")
+		"one-shot model spec 'name,key=value,...' (repeatable; per-field precedence flag > file > preset). Keys: name, protocol, endpoint, api_key, model, context_window, price_in, price_out, bedrock, region, api_version")
 	f.StringArrayVar(&cfg.noModels, "no-model", nil, "skip a model by name (repeatable)")
 
 	f.BoolVar(&cfg.useBedrock, "bedrock", false,
@@ -242,11 +242,12 @@ func run(ctx context.Context, cfg *config, input string) error {
 		return nil
 	}
 
-	voters, names, _, err := resolveSpecs(cfg, configFile)
+	voters, err := resolveSpecs(cfg, configFile)
 	if err != nil {
 		return err
 	}
 	infos := modelInfos(voters)
+	names := report.DisplayNames(infos)
 
 	// Use the live TUI on an interactive terminal unless --plain is set; a
 	// non-TTY stdout (pipe, redirect, CI) always gets plain line output.
@@ -397,7 +398,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 // --config points at a missing or unreadable file.
 func discoverConfigFile(cfg *config, input string) (string, error) {
 	if cfg.configFile != "" {
-		if info, err := os.Stat(cfg.configFile); err != nil || info.IsDir() {
+		if !isRegularFile(cfg.configFile) {
 			return "", fmt.Errorf("config file not found: %s", cfg.configFile)
 		}
 		return cfg.configFile, nil
@@ -520,12 +521,12 @@ func presetSpecs(cfg *config) []provider.ModelSpec {
 // preset-then-declaration order, skipping the rest with a reason. voters[0] is
 // the preferred model; when no spec resolves it errors listing every skip
 // reason.
-func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string, []string, error) {
+func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, error) {
 	var fileSpecs []provider.ModelSpec
 	if configFile != "" {
 		specs, err := provider.LoadTOML(configFile)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		fileSpecs = specs
 	}
@@ -533,7 +534,7 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string
 	for _, s := range cfg.addModels {
 		spec, err := parseAddModel(s)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		flagSpecs = append(flagSpecs, spec)
 	}
@@ -545,7 +546,7 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string
 		presetNames[p.Name] = true
 	}
 	if err := provider.ValidateSpecs(merged, presetNames); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	skipFlag := map[string]string{}
@@ -570,7 +571,6 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string
 	}
 
 	var voters []provider.Provider
-	var names []string
 	var skipReasons []string
 	for _, spec := range merged {
 		if flag, skipped := skipFlag[spec.Name]; skipped {
@@ -591,12 +591,11 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, []string
 			continue
 		}
 		voters = append(voters, p)
-		names = append(names, fmt.Sprintf("%s (%s)", spec.Name, spec.Model))
 	}
 	if len(voters) == 0 {
-		return nil, nil, skipReasons, fmt.Errorf("no models available; %s", strings.Join(skipReasons, "; "))
+		return nil, fmt.Errorf("no models available; %s", strings.Join(skipReasons, "; "))
 	}
-	return voters, names, skipReasons, nil
+	return voters, nil
 }
 
 // modelInfos snapshots each voter's identity for the structured report

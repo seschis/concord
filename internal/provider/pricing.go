@@ -122,7 +122,7 @@ func containsAny(s string, subs []string) bool {
 
 // Anthropic prompt-cache multipliers on the base input rate: a cache read costs
 // 0.1x input, and a cache write 1.25x input for the 5-minute TTL the adapter
-// uses (see cacheTTL in constructors.go). Keep cacheWriteMult in sync with that
+// uses (see cacheTTL in cache.go). Keep cacheWriteMult in sync with that
 // TTL: it would be 2x for a 1-hour TTL. Only the Claude paths report cache
 // tokens; every other provider passes 0 for both, so these terms vanish.
 const (
