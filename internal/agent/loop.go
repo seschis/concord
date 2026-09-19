@@ -58,6 +58,11 @@ type LoopOptions struct {
 	MaxTokens int
 	OnStep    StepFunc      // optional realtime progress callback
 	Pruner    ContextPruner // optional; nil means send full history (NoPrune)
+	// ContextWindow is the model's context window in tokens (0 = unknown,
+	// today's behavior). When set with a pruner, the loop derives its own
+	// per-run pruner instance carrying the window, so window-aware trimming
+	// never crosses concurrent loops of different models.
+	ContextWindow int
 }
 
 // send applies the pruning strategy to the running history, returning the view
@@ -99,6 +104,12 @@ func MaxItersForEffort(effort string) int {
 func RunToolLoop(ctx context.Context, o LoopOptions) (LoopResult, error) {
 	if o.MaxIters <= 0 {
 		o.MaxIters = 8
+	}
+	// Derive the per-run pruner instance carrying this model's window. The
+	// shared (run-scoped) pruner stays the on/off switch; WithWindow returns a
+	// copy, so concurrent loops never share window state.
+	if o.ContextWindow > 0 && o.Pruner != nil {
+		o.Pruner = o.Pruner.WithWindow(o.ContextWindow)
 	}
 	msgs := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, o.System),
