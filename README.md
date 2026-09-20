@@ -84,7 +84,7 @@ cost breakdown. A trimmed excerpt from the demo run:
 
 **Date:** 2026-09-15 14:53:19
 **Input file:** `examples/findings.sarif`
-**Models:** Claude (Bedrock) (us.anthropic.claude-sonnet-4-5-20250929-v1:0)
+**Models:** claude (us.anthropic.claude-sonnet-4-5-20250929-v1:0)
 **Analysts:** strict, business
 **Context strategy:** shared (srcroot `examples/sample-app`)
 **Effort:** low
