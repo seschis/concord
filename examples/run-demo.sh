@@ -17,7 +17,7 @@ go build -o bin/concord ./cmd/concord
 
 asciinema record -f asciicast-v2 --overwrite --window-size 110x32 --idle-time-limit 2 \
   examples/demo.cast \
-  --command "bin/concord --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif $*"
+  --command "bin/concord --analyst strict --analyst business --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif $*"
 
 echo
 echo "Recording:   examples/demo.cast"
