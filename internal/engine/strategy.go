@@ -22,6 +22,10 @@ type Opts struct {
 type Run struct {
 	Results   []triage.Result
 	ExtraCost float64 // cost of the shared explorer; 0 for per-model
+	// GatherErr is the shared gatherer's failure, when one ran and failed:
+	// the brief degrades to empty (metadata-only) and the report must show
+	// it rather than claim context was gathered.
+	GatherErr string
 }
 
 // Strategy decides how the voters get their code context.
@@ -47,18 +51,21 @@ func (SharedContext) Name() string { return "shared" }
 func (s SharedContext) Run(ctx context.Context, f finding.Finding, voters []provider.Provider, o Opts) Run {
 	brief := ""
 	var extra float64
+	var gatherErr string
 	if o.SrcRoot != "" && s.Gatherer != nil {
 		b, c, err := s.Gatherer.Gather(ctx, f, o.SrcRoot, o.ContextRoots, o.Effort)
 		extra = c
 		if err == nil {
 			brief = b
+		} else {
+			gatherErr = err.Error()
 		}
 	}
 	results := fanOut(voters, func(p provider.Provider) triage.Result {
 		r, _ := p.Analyze(ctx, f, provider.AnalyzeInput{SharedContext: brief, Effort: o.Effort})
 		return r
 	})
-	return Run{Results: results, ExtraCost: extra}
+	return Run{Results: results, ExtraCost: extra, GatherErr: gatherErr}
 }
 
 // PerModelAgent gives each voter its own tool loop to crawl the repo.

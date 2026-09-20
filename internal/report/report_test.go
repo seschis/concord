@@ -17,7 +17,7 @@ func sampleRow() FindingResult {
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "raw SQL from request", CostUSD: 0.01},
 		"gemini": {Provider: "gemini", FinalVerdict: triage.ConfirmedReal, Summary: "confirmed sink", CostUSD: 0.002},
 	}
-	return NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
+	return NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
 }
 
 func TestConcordAnalysisMapping(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAdjudicationDrivesClassification(t *testing.T) {
 	}
 	adj := &triage.AdjudicationResult{FinalVerdict: triage.NotExploitable, Reasoning: "framework auto-escapes", KeyDecidingFactor: "template autoescape"}
 	adjudications := []triage.AdjudicationResult{*adj}
-	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0, "")
 	if row.ConcordAnalysis.Classification != "FALSE_POSITIVE" {
 		t.Fatalf("want FALSE_POSITIVE, got %s", row.ConcordAnalysis.Classification)
 	}
@@ -59,7 +59,7 @@ func TestAdjudicationsPanelRecorded(t *testing.T) {
 		{Judge: "strict", Model: "claude-opus", FinalVerdict: triage.NotExploitable, Reasoning: "strict says no taint"},
 		{Judge: "business", Model: "gemini", FinalVerdict: triage.LikelyReal, Reasoning: "business says exploitable"},
 	}
-	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0, "")
 	if len(row.Adjudications) != 2 {
 		t.Fatalf("want 2 adjudications recorded, got %d", len(row.Adjudications))
 	}
@@ -96,9 +96,14 @@ func TestMarkdownSurfacesJudgeError(t *testing.T) {
 		{Judge: "strict", Model: "claude", FinalVerdict: triage.Unlikely, Reasoning: "no taint"},
 		{Judge: "failing", Model: "claude", FinalVerdict: triage.NeedsMoreContext, Error: "boom"},
 	}
-	row := NewFindingResult(f, results, triage.Unlikely, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.Unlikely, "none", adjudications, 0, "")
 	dir := t.TempDir()
-	if _, err := WriteMarkdown(dir, Meta{Date: "2026-01-01", InputFile: "x.sarif"}, []FindingResult{row}); err != nil {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models:    []ModelInfo{{Name: "claude", Model: "claude-opus"}, {Name: "gemini", Model: "gemini-2.5-flash"}},
+	}
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
 	}
 	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
@@ -118,9 +123,9 @@ func TestMarkdownAnalystTable(t *testing.T) {
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "claude sees it real"},
 		"strict": {Provider: "strict", FinalVerdict: triage.NotExploitable, Summary: "strict disagrees"},
 	}
-	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
+	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
 	dir := t.TempDir()
-	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", Analysts: []string{"strict"}}
+	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", Models: []ModelInfo{{Name: "claude", Model: "claude-opus"}}, Analysts: []string{"strict"}}
 	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +159,7 @@ func TestCVSSValidVectorScored(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.ConfirmedReal, CVSSVector: vec},
 	}
-	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0)
+	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0, "")
 	if row.CVSS == nil {
 		t.Fatalf("valid vector should produce a scored CVSS40 block")
 	}
@@ -173,7 +178,7 @@ func TestCVSSInvalidVectorSurfacedNotDropped(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.ConfirmedReal, CVSSVector: bad},
 	}
-	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0)
+	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0, "")
 	if row.CVSS != nil {
 		t.Fatalf("invalid vector must not produce a scored CVSS40 block, got %+v", row.CVSS)
 	}
@@ -248,7 +253,7 @@ func TestMarkdownVoterRowsDataDriven(t *testing.T) {
 		"qwen":   {Provider: "qwen", FinalVerdict: triage.Unlikely, Summary: "qwen note", CostUSD: 0.002},
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "claude note", CostUSD: 0.01},
 	}
-	row := NewFindingResult(finding.Finding{ID: "F040", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0)
+	row := NewFindingResult(finding.Finding{ID: "F040", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0, "")
 	dir := t.TempDir()
 	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
@@ -284,7 +289,7 @@ func TestMarkdownUnpricedMarkerAndHeaderNote(t *testing.T) {
 		"qwen":   {Provider: "qwen", FinalVerdict: triage.Unlikely, Summary: "local model", CostUSD: 0},
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "real", CostUSD: 0.01},
 	}
-	row := NewFindingResult(finding.Finding{ID: "F041", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0)
+	row := NewFindingResult(finding.Finding{ID: "F041", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0, "")
 	dir := t.TempDir()
 	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
@@ -319,7 +324,7 @@ func TestExplicitZeroPricePricedNoMarker(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "real", CostUSD: 0},
 	}
-	row := NewFindingResult(finding.Finding{ID: "F042", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "unanimous", nil, 0)
+	row := NewFindingResult(finding.Finding{ID: "F042", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "unanimous", nil, 0, "")
 	dir := t.TempDir()
 	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
@@ -399,8 +404,8 @@ func TestExplorerRowRendersWhenGathererRan(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, CostUSD: 0.01},
 	}
-	zeroRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
-	costRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0.005)
+	zeroRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
+	costRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0.005, "")
 
 	cases := []struct {
 		name string
@@ -425,5 +430,40 @@ func TestExplorerRowRendersWhenGathererRan(t *testing.T) {
 				t.Fatalf("explorer row rendered = %v, want %v:\n%s", got, tc.want, md)
 			}
 		})
+	}
+}
+
+// A failed shared gather must not claim "shared context gathering": the
+// explorer row shows the failure and results.json carries explorer_error, so
+// a run triaged on metadata alone is traceable in the durable artifacts.
+func TestExplorerRowShowsGatherFailure(t *testing.T) {
+	f := finding.Finding{ID: "F060", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, CostUSD: 0.01},
+	}
+	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0.005, "400 unknown model id")
+	dir := t.TempDir()
+	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", ContextStrategy: "shared", SrcRoot: "/repo"}
+
+	jp, err := WriteJSON(dir, meta, []FindingResult{row})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(jp)
+	if !strings.Contains(string(raw), `"explorer_error": "400 unknown model id"`) {
+		t.Fatalf("results.json must carry explorer_error for a failed gather: %s", raw)
+	}
+
+	mp, err := WriteMarkdown(dir, meta, []FindingResult{row})
+	if err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(mp)
+	s := string(md)
+	if !strings.Contains(s, "| explorer | — | $0.0050 | failed: 400 unknown model id |") {
+		t.Fatalf("explorer row must show the gather failure:\n%s", s)
+	}
+	if strings.Contains(s, "shared context gathering") {
+		t.Fatalf("a failed gather must not claim context gathering:\n%s", s)
 	}
 }

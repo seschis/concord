@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -214,11 +213,6 @@ func run(ctx context.Context, cfg *config, input string) error {
 		ctx = agent.WithPruner(ctx, agent.NewBreadcrumbPruner())
 	}
 
-	configFile, err := discoverConfigFile(cfg, input)
-	if err != nil {
-		return err
-	}
-
 	fmt.Printf("Loading findings from: %s\n", input)
 	findings, err := ingest.Load(input)
 	if err != nil {
@@ -240,6 +234,14 @@ func run(ctx context.Context, cfg *config, input string) error {
 		}
 		fmt.Printf("\nDry run complete. Normalized findings written to: %s\n", path)
 		return nil
+	}
+
+	// The model config is only needed where models are resolved, so a
+	// parse-only run never depends on it (a stale --config path must not
+	// abort a dry run).
+	configFile, err := discoverConfigFile(cfg, input)
+	if err != nil {
+		return err
 	}
 
 	voters, err := resolveSpecs(cfg, configFile)
@@ -419,61 +421,38 @@ func isRegularFile(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// redactSpec hides the api_key value in a --add-model spec string before the
+// spec is echoed in an error message: the flag's keys include api_key, so a
+// parse error must never repeat a literal credential.
+func redactSpec(spec string) string {
+	parts := strings.Split(spec, ",")
+	for i, kv := range parts {
+		key, _, ok := strings.Cut(kv, "=")
+		if ok && strings.TrimSpace(key) == "api_key" {
+			parts[i] = "api_key=***"
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 // parseAddModel parses a one-shot --add-model spec: the name before the first
 // comma, then key=value pairs split at the first '=' (so values may contain
-// '='). A name alone yields a spec carrying only the name, which validation
-// rejects as incomplete. Unknown keys and malformed pairs are errors.
+// '='), each assigned through provider.ModelSpec.Set (the single home of the
+// key registry). A name alone yields a spec carrying only the name, which
+// validation rejects as incomplete. Unknown keys and malformed pairs are
+// errors, with the echoed spec redacted.
 func parseAddModel(spec string) (provider.ModelSpec, error) {
 	var m provider.ModelSpec
+	echo := redactSpec(spec)
 	parts := strings.Split(spec, ",")
 	m.Name = strings.TrimSpace(parts[0])
 	for _, kv := range parts[1:] {
 		key, val, ok := strings.Cut(kv, "=")
 		if !ok {
-			return m, fmt.Errorf("invalid --add-model %q: %q is not key=value", spec, kv)
+			return m, fmt.Errorf("invalid --add-model %q: %q is not key=value", echo, kv)
 		}
-		key, val = strings.TrimSpace(key), strings.TrimSpace(val)
-		switch key {
-		case "name":
-			m.Name = val
-		case "protocol":
-			m.Protocol = provider.Protocol(val)
-		case "endpoint":
-			m.Endpoint = val
-		case "api_key":
-			m.APIKey = val
-		case "model":
-			m.Model = val
-		case "context_window":
-			n, err := strconv.Atoi(val)
-			if err != nil {
-				return m, fmt.Errorf("invalid --add-model %q: context_window must be an integer", spec)
-			}
-			m.ContextWindow = n
-		case "price_in":
-			f, err := strconv.ParseFloat(val, 64)
-			if err != nil {
-				return m, fmt.Errorf("invalid --add-model %q: price_in must be a number", spec)
-			}
-			m.PriceIn = &f
-		case "price_out":
-			f, err := strconv.ParseFloat(val, 64)
-			if err != nil {
-				return m, fmt.Errorf("invalid --add-model %q: price_out must be a number", spec)
-			}
-			m.PriceOut = &f
-		case "bedrock":
-			b, err := strconv.ParseBool(val)
-			if err != nil {
-				return m, fmt.Errorf("invalid --add-model %q: bedrock must be a boolean", spec)
-			}
-			m.Bedrock = b
-		case "region":
-			m.Region = val
-		case "api_version":
-			m.APIVersion = val
-		default:
-			return m, fmt.Errorf("invalid --add-model %q: unknown key %q (known: api_key, api_version, bedrock, context_window, endpoint, model, name, price_in, price_out, protocol, region)", spec, key)
+		if err := m.Set(strings.TrimSpace(key), strings.TrimSpace(val)); err != nil {
+			return m, fmt.Errorf("invalid --add-model %q: %w", echo, err)
 		}
 	}
 	return m, nil

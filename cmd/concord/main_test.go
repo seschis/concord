@@ -218,6 +218,23 @@ func TestParseAddModel(t *testing.T) {
 		t.Fatal("a non-integer context_window should be an error")
 	}
 
+	// A spec carrying a literal api_key must not leak the key in any parse
+	// error: the echoed spec is redacted (CWE-532).
+	for _, specIn := range []string{
+		"qwen,api_key=sk-secret-value,bogus=1",
+		"qwen,api_key=sk-secret-value,notakeyvalue",
+		"qwen,api_key=sk-secret-value,context_window=big",
+		"qwen,api_key=sk-secret-value,price_in=big",
+	} {
+		_, err := parseAddModel(specIn)
+		if err == nil {
+			t.Fatalf("parseAddModel(%q) should fail", specIn)
+		}
+		if strings.Contains(err.Error(), "sk-secret-value") {
+			t.Fatalf("parse error must not echo the api_key value: %v", err)
+		}
+	}
+
 	// A reserved name parses fine; validation rejects it naming the set.
 	spec, err = parseAddModel("strict,protocol=openai,model=gpt")
 	if err != nil {
@@ -384,6 +401,41 @@ context_window = 16384
 	judges, _ := buildJudges(voters, &config{})
 	if judges[0].Model() != "claude-opus-5" {
 		t.Fatalf("judge default should be the preferred voter (claude), got %q", judges[0].Model())
+	}
+}
+
+// TestResolveSpecsFactoryErrorSkip: a spec the Resolvable predicate accepts
+// but the factory rejects (azure: key resolvable, no endpoint anywhere) is
+// skipped with the factory reason — the run proceeds with the remaining
+// voters, and aborts listing the reason when it was the only resolvable one.
+func TestResolveSpecsFactoryErrorSkip(t *testing.T) {
+	clearCredentialEnvs(t)
+	t.Setenv("AZURE_OPENAI_API_KEY", "azure-key")
+
+	// Azure alone: Resolvable passes on the key, NewFromSpec needs an
+	// endpoint too and errors, so the only voter is skipped and the run
+	// aborts listing the factory reason.
+	voters, err := resolveSpecs(&config{maxTokens: 100}, "")
+	if err == nil {
+		t.Fatalf("want an error when the only resolvable spec fails at construction, got %d voters", len(voters))
+	}
+	if !strings.Contains(err.Error(), "azure requires an api key and endpoint") {
+		t.Fatalf("the zero-models error should carry the azure factory reason, got %q", err.Error())
+	}
+	if len(voters) != 0 {
+		t.Fatalf("want no voters, got %d", len(voters))
+	}
+
+	// With a second resolvable voter the run proceeds and only azure is
+	// skipped.
+	t.Setenv("ANTHROPIC_API_KEY", "claude-key")
+	voters, err = resolveSpecs(&config{maxTokens: 100}, "")
+	if err != nil {
+		t.Fatalf("a second resolvable voter should let the run proceed: %v", err)
+	}
+	names := report.DisplayNames(modelInfos(voters))
+	if len(voters) != 1 || !strings.HasPrefix(names[0], "claude (") {
+		t.Fatalf("want only the claude voter (azure skipped at construction), got %v", names)
 	}
 }
 

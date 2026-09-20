@@ -106,6 +106,7 @@ type FindingResult struct {
 	CVSS            *CVSS40                     `json:"cvss40,omitempty"`
 	CVSSError       *CVSSParseError             `json:"cvss40_error,omitempty"`
 	ExplorerCostUSD float64                     `json:"explorer_cost_usd,omitempty"`
+	ExplorerError   string                      `json:"explorer_error,omitempty"`
 	Results         map[string]triage.Result    `json:"results"`
 	Adjudications   []triage.AdjudicationResult `json:"adjudications,omitempty"`
 	ConcordAnalysis ConcordAnalysis             `json:"concordAnalysis"`
@@ -113,9 +114,12 @@ type FindingResult struct {
 
 // NewFindingResult assembles a result row from every model's analysis, the voted
 // final verdict, and (when the vote was a tie) the judge panel's adjudications.
-// The concordAnalysis block derives from the judge matching the final verdict
-// if present, otherwise from the result matching the final verdict.
-func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64) FindingResult {
+// explorerErr is the shared gatherer's failure when one ran and failed; the
+// row then documents a failed gather instead of claiming context was
+// gathered. The concordAnalysis block derives from the judge matching the
+// final verdict if present, otherwise from the result matching the final
+// verdict.
+func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64, explorerErr string) FindingResult {
 	primary := pickPrimary(results, final)
 
 	just := ""
@@ -143,6 +147,7 @@ func NewFindingResult(f finding.Finding, results map[string]triage.Result, final
 		FinalVerdict:    string(final),
 		Agreement:       agreement,
 		ExplorerCostUSD: explorerCost,
+		ExplorerError:   explorerErr,
 		Results:         results,
 		Adjudications:   adjudications,
 		ConcordAnalysis: ConcordAnalysis{

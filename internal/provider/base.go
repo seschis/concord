@@ -51,13 +51,6 @@ func (p *LLMProvider) ContextWindow() int { return p.contextWindow }
 // Priced reports whether the model has an explicit or built-in-table price.
 func (p *LLMProvider) Priced() bool { return p.priced }
 
-// effectiveMaxTokens is the per-call output budget: the global max-tokens
-// budget clamped to half the model's context window, so output can never
-// consume more than half the window a single input+output exchange needs.
-// An unknown window (0) leaves the budget unclamped; the clamp never raises
-// the budget above --max-tokens. Presets default to a 128000 window, so with
-// the default 16000 budget the clamp is a no-op and presets-only requests are
-// byte-identical to before.
 // clampToHalfWindow caps budget at half the model's context window; an
 // unknown window (0) leaves the budget untouched and the clamp never raises
 // it.
@@ -70,6 +63,13 @@ func (p *LLMProvider) clampToHalfWindow(budget int) int {
 	return budget
 }
 
+// effectiveMaxTokens is the per-call output budget: the global max-tokens
+// budget clamped to half the model's context window, so output can never
+// consume more than half the window a single input+output exchange needs.
+// An unknown window (0) leaves the budget unclamped; the clamp never raises
+// the budget above --max-tokens. Presets default to a 128000 window, so with
+// the default 16000 budget the clamp is a no-op and presets-only requests are
+// byte-identical to before.
 func (p *LLMProvider) effectiveMaxTokens() int {
 	return p.clampToHalfWindow(p.maxTokens)
 }

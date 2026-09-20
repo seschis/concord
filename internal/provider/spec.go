@@ -188,7 +188,9 @@ func (spec ModelSpec) Resolvable() (bool, string) {
 // lazily, so a missing key surfaces at request time, not here — except where
 // the underlying client requires a token at construction (the openai
 // client), in which case an explicit endpoint falls back to a placeholder
-// token and the keyless-no-endpoint case errors.
+// token and the keyless-no-endpoint case errors, and for a Bedrock spec whose
+// AWS shared config fails to load (broken profile or config file), which
+// errors here instead of panicking.
 func NewFromSpec(spec ModelSpec, maxTokens int) (*LLMProvider, error) {
 	if spec.ContextWindow <= 0 {
 		spec.ContextWindow = defaultContextWindow
@@ -258,11 +260,20 @@ func NewFromSpec(spec ModelSpec, maxTokens int) (*LLMProvider, error) {
 
 	case ProtocolAnthropic:
 		if spec.Bedrock {
+			// Load the AWS config explicitly (not via the SDK's
+			// WithLoadDefaultConfig, which panics on a broken shared config):
+			// a config-level error becomes a per-spec skip reason, while
+			// credential-level failures stay lazy inside the config and
+			// surface at first use.
 			var cfgOpts []func(*awsconfig.LoadOptions) error
 			if spec.Region != "" {
 				cfgOpts = append(cfgOpts, awsconfig.WithRegion(spec.Region))
 			}
-			client := anthropicsdk.NewClient(bedrock.WithLoadDefaultConfig(context.Background(), cfgOpts...))
+			awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), cfgOpts...)
+			if err != nil {
+				return nil, fmt.Errorf("init bedrock: %w", err)
+			}
+			client := anthropicsdk.NewClient(bedrock.WithConfig(awsCfg))
 			llm = &anthropicNativeModel{client: client, model: spec.Model, cacheTTL: cacheTTL}
 			table, contains = claudeBedrockPricing, true
 			break

@@ -235,6 +235,16 @@ func TestValidateSpecs(t *testing.T) {
 		}
 	})
 
+	t.Run("gemini with a custom endpoint is rejected", func(t *testing.T) {
+		s := valid()
+		s.Protocol = ProtocolGemini
+		s.Endpoint = "http://127.0.0.1:8999"
+		err := ValidateSpecs([]ModelSpec{s}, nil)
+		if err == nil || !strings.Contains(err.Error(), "gemini") || !strings.Contains(err.Error(), "endpoint") {
+			t.Fatalf("want a gemini+endpoint rejection, got %v", err)
+		}
+	})
+
 	t.Run("empty model id", func(t *testing.T) {
 		s := valid()
 		s.Model = ""

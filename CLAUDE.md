@@ -221,9 +221,12 @@ swallowed — it must never break a triage run.
   no key resolvable anywhere) runs on a placeholder token. An explicit
   `price_in`/`price_out` pair wins over the built-in tables; an unpriced model
   costs $0 and carries a visible marker.
-  A constructor-level change is only needed for a genuinely NEW protocol: add
-  a case in `provider.NewFromSpec` (the one-way import graph holds — `provider`
-  may import langchaingo/llms and anthropic-sdk-go, nothing else), a pricing
+   A constructor-level change is only needed for a genuinely NEW protocol: add
+   a case in `provider.NewFromSpec` (the one-way import graph holds — `provider`
+   is the only package importing the LLM client libraries, langchaingo/llms
+   and anthropic-sdk-go; BurntSushi/toml for concord.toml and
+   aws-sdk-go-v2/config for Bedrock are its documented direct dependencies),
+   a pricing
   table in `provider/pricing.go` (`costFunc` takes
   `(model, in, out, cacheWrite, cacheRead int)`; non-Claude protocols report
   zero cache tokens, so those terms vanish), and the protocol's resolvability

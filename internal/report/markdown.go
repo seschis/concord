@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/seschis/concord/internal/triage"
@@ -66,11 +65,6 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 	for _, mi := range meta.Models {
 		priced[mi.Name] = mi.Priced
 	}
-	known := len(meta.Models) > 0
-	analyst := make(map[string]bool, len(meta.Analysts))
-	for _, a := range meta.Analysts {
-		analyst[a] = true
-	}
 	sharedGatherer := meta.ContextStrategy == "shared" && meta.SrcRoot != ""
 
 	// Per-finding detail.
@@ -131,26 +125,15 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 		// Per-model verdicts and cost breakdown.
 		b.WriteString("| Role | Verdict | Cost | Notes |\n|---|---|---|---|\n")
 		// The explorer row renders whenever a gatherer ran — including an
-		// unpriced gatherer at $0. A shared strategy with a srcroot always
-		// gathers; a nonzero explorer cost implies it ran too.
-		if r.ExplorerCostUSD > 0 || sharedGatherer {
+		// unpriced gatherer at $0 — and shows the error when the gather
+		// failed, so a run triaged on metadata alone never claims context
+		// was gathered.
+		if r.ExplorerError != "" {
+			fmt.Fprintf(&b, "| explorer | — | $%.4f | failed: %s |\n", r.ExplorerCostUSD, mdCell(r.ExplorerError))
+		} else if r.ExplorerCostUSD > 0 || sharedGatherer {
 			fmt.Fprintf(&b, "| explorer | — | $%.4f | shared context gathering |\n", r.ExplorerCostUSD)
 		}
-		rows := voterNames
-		if !known {
-			// No structured model list (legacy callers): fall back to the
-			// observed result keys in sorted order so every voter still gets a
-			// row.
-			rows = make([]string, 0, len(voterNames)+len(r.Results))
-			rows = append(rows, voterNames...)
-			for name := range r.Results {
-				if !analyst[name] {
-					rows = append(rows, name)
-				}
-			}
-			sort.Strings(rows)
-		}
-		for _, name := range rows {
+		for _, name := range voterNames {
 			mr, ok := r.Results[name]
 			if !ok {
 				continue
@@ -160,7 +143,7 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 				note = "error: " + mr.Error
 			}
 			marker := ""
-			if known && !priced[name] {
+			if !priced[name] {
 				marker = " (unpriced)"
 			}
 			fmt.Fprintf(&b, "| %s (voter) | %s | $%.4f%s | %s |\n", name, mr.FinalVerdict, mr.CostUSD, marker, mdCell(note))

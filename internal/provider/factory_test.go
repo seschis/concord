@@ -6,11 +6,23 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/tmc/langchaingo/llms"
 )
+
+// pinAWSConfigFiles points the AWS SDK at empty temp config files so a
+// host machine's ~/.aws can never leak into the Bedrock construction tests
+// (an empty env value means "use the default paths", so the files must be
+// pinned explicitly).
+func pinAWSConfigFiles(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "config"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
+}
 
 // TestNewFromSpecPresets is the preset gate: each preset built from its spec
 // value carries the right name, model id, and the 128000 default context
@@ -160,6 +172,7 @@ func TestNewFromSpecCustomAnthropicEndpoint(t *testing.T) {
 // construction, and the Bedrock pricing table (substring match) applies.
 func TestNewFromSpecBedrock(t *testing.T) {
 	clearCredentialEnvs(t)
+	pinAWSConfigFiles(t)
 	spec := ModelSpec{
 		Name:          "claude",
 		Protocol:      ProtocolAnthropic,
@@ -184,6 +197,41 @@ func TestNewFromSpecBedrock(t *testing.T) {
 	// claudeBedrockPricing "claude-sonnet-4": output $15/M.
 	if got := p.cost(p.model, 0, 1_000_000, 0, 0); got != 15.0 {
 		t.Errorf("1M output cost = %v, want 15.0 (bedrock table substring match)", got)
+	}
+}
+
+// TestNewFromSpecBedrockBrokenConfig: a broken AWS shared config (a profile
+// that does not exist) is a config-level error. NewFromSpec must return it as
+// a per-spec skip reason instead of panicking (the SDK's
+// WithLoadDefaultConfig panics; construction now loads the config explicitly
+// and hands it to bedrock.WithConfig).
+func TestNewFromSpecBedrockBrokenConfig(t *testing.T) {
+	clearCredentialEnvs(t)
+	pinAWSConfigFiles(t)
+	t.Setenv("AWS_PROFILE", "missing-profile")
+	spec := ModelSpec{
+		Name:          "claude",
+		Protocol:      ProtocolAnthropic,
+		Bedrock:       true,
+		Region:        "us-east-1",
+		Model:         "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		ContextWindow: 128000,
+	}
+	if _, err := NewFromSpec(spec, 100); err == nil {
+		t.Fatal("NewFromSpec succeeded, want an error for a nonexistent AWS profile (the old code panicked)")
+	}
+}
+
+// TestNewFromSpecAzureMissingEndpoint: azure's Resolvable predicate accepts a
+// key alone, but construction needs an endpoint too — the factory-error seam
+// resolveSpecs turns into a skip line.
+func TestNewFromSpecAzureMissingEndpoint(t *testing.T) {
+	clearCredentialEnvs(t)
+	t.Setenv("AZURE_OPENAI_API_KEY", "azure-key")
+	spec := ModelSpec{Name: "azure", Protocol: ProtocolAzure, Model: "gpt-5.5", ContextWindow: 128000}
+	_, err := NewFromSpec(spec, 100)
+	if err == nil || !strings.Contains(err.Error(), "azure requires an api key and endpoint") {
+		t.Fatalf("want the azure key-and-endpoint error, got %v", err)
 	}
 }
 

@@ -184,6 +184,12 @@ func validateSpec(s ModelSpec, isPreset bool) error {
 	default:
 		return fmt.Errorf("model %q: unknown protocol %q (want openai|anthropic|gemini|azure)", s.Name, s.Protocol)
 	}
+	// gemini is preset-only: the factory never consults spec.Endpoint for it,
+	// so accepting a gemini+endpoint spec would silently target Google's real
+	// API instead of the configured server. Reject it at load instead.
+	if s.Protocol == ProtocolGemini && s.Endpoint != "" {
+		return fmt.Errorf("model %q: protocol gemini is preset-only and does not support a custom endpoint", s.Name)
+	}
 	if s.Model == "" {
 		return fmt.Errorf("model %q: model id is required", s.Name)
 	}
