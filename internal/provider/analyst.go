@@ -16,11 +16,13 @@ import "github.com/seschis/concord/internal/triage"
 // the persona's lens text.
 func NewAnalyst(base *LLMProvider, label, focus string) *LLMProvider {
 	return &LLMProvider{
-		llm:       base.llm,
-		name:      label,
-		model:     base.model,
-		maxTokens: base.maxTokens,
-		cost:      base.cost,
-		system:    triage.BuildAnalystSystemPrompt(focus),
+		llm:           base.llm,
+		name:          label,
+		model:         base.model,
+		maxTokens:     base.maxTokens,
+		cost:          base.cost,
+		contextWindow: base.contextWindow,
+		priced:        base.priced,
+		system:        triage.BuildAnalystSystemPrompt(focus),
 	}
 }

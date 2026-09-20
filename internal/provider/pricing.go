@@ -38,8 +38,9 @@ var geminiPricing = map[string]pricePer1M{
 	"gemini-1.5-flash": {0.075, 0.30},
 }
 
-// codexPricing mirrors CODEX_PRICING in the Python tool.
-var codexPricing = map[string]pricePer1M{
+// openaiPricing mirrors CODEX_PRICING in the Python tool (the table keys are
+// real model ids and stay put through the codex→openai rename).
+var openaiPricing = map[string]pricePer1M{
 	"gpt-5.6-sol":         {4.0, 20.0},
 	"gpt-5.6":             {4.0, 20.0},
 	"gpt-5.5":             {4.0, 20.0},
@@ -121,7 +122,7 @@ func containsAny(s string, subs []string) bool {
 
 // Anthropic prompt-cache multipliers on the base input rate: a cache read costs
 // 0.1x input, and a cache write 1.25x input for the 5-minute TTL the adapter
-// uses (see cacheTTL in constructors.go). Keep cacheWriteMult in sync with that
+// uses (see cacheTTL in cache.go). Keep cacheWriteMult in sync with that
 // TTL: it would be 2x for a 1-hour TTL. Only the Claude paths report cache
 // tokens; every other provider passes 0 for both, so these terms vanish.
 const (
@@ -192,8 +193,8 @@ func costGemini(model string, inTok, outTok, cacheWrite, cacheRead int) float64 
 	return costFrom(geminiPricing, model, inTok, outTok, cacheWrite, cacheRead)
 }
 
-func costCodex(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {
-	return costFrom(codexPricing, model, inTok, outTok, cacheWrite, cacheRead)
+func costOpenAI(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {
+	return costFrom(openaiPricing, model, inTok, outTok, cacheWrite, cacheRead)
 }
 
 func costAzure(model string, inTok, outTok, cacheWrite, cacheRead int) float64 {

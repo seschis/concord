@@ -5,6 +5,7 @@ package report
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,20 +15,54 @@ import (
 	"github.com/seschis/concord/internal/triage"
 )
 
+// ModelInfo is one configured voter in the run-level metadata: its spec name,
+// model id, context window, and whether it carries a price. Unpriced models
+// cost $0 and are marked as such in report.md, the TUI, and the stdout banner.
+type ModelInfo struct {
+	Name          string `json:"name"`
+	Model         string `json:"model"`
+	ContextWindow int    `json:"context_window"`
+	Priced        bool   `json:"priced"`
+}
+
 // Meta is the run-level header.
 type Meta struct {
-	Date            string   `json:"date"`
-	InputFile       string   `json:"input_file"`
-	SrcRoot         string   `json:"srcroot,omitempty"`
-	ContextStrategy string   `json:"context_strategy"`
-	ContextDirs     []string `json:"context_dirs,omitempty"`
-	ContextGuides   []string `json:"context_guides,omitempty"`
-	Effort          string   `json:"effort,omitempty"`
-	Models          []string `json:"models"`
-	Analysts        []string `json:"analysts,omitempty"`
-	Judges          []string `json:"judges,omitempty"`
-	Total           int      `json:"total"`
-	TotalCostUSD    float64  `json:"total_cost_usd"`
+	Date            string      `json:"date"`
+	InputFile       string      `json:"input_file"`
+	SrcRoot         string      `json:"srcroot,omitempty"`
+	ContextStrategy string      `json:"context_strategy"`
+	ContextDirs     []string    `json:"context_dirs,omitempty"`
+	ContextGuides   []string    `json:"context_guides,omitempty"`
+	Effort          string      `json:"effort,omitempty"`
+	Models          []ModelInfo `json:"models"`
+	Analysts        []string    `json:"analysts,omitempty"`
+	Judges          []string    `json:"judges,omitempty"`
+	Total           int         `json:"total"`
+	TotalCostUSD    float64     `json:"total_cost_usd"`
+}
+
+// DisplayNames renders each model as "name (model id)" for headers and banners.
+func DisplayNames(models []ModelInfo) []string {
+	out := make([]string, 0, len(models))
+	for _, m := range models {
+		if m.Model != "" {
+			out = append(out, fmt.Sprintf("%s (%s)", m.Name, m.Model))
+		} else {
+			out = append(out, m.Name)
+		}
+	}
+	return out
+}
+
+// UnpricedNames returns the names of models without a price, in order.
+func UnpricedNames(models []ModelInfo) []string {
+	var out []string
+	for _, m := range models {
+		if !m.Priced {
+			out = append(out, m.Name)
+		}
+	}
+	return out
 }
 
 // ConcordAnalysis is the per-finding verdict block embedded in results.json
@@ -71,6 +106,7 @@ type FindingResult struct {
 	CVSS            *CVSS40                     `json:"cvss40,omitempty"`
 	CVSSError       *CVSSParseError             `json:"cvss40_error,omitempty"`
 	ExplorerCostUSD float64                     `json:"explorer_cost_usd,omitempty"`
+	ExplorerError   string                      `json:"explorer_error,omitempty"`
 	Results         map[string]triage.Result    `json:"results"`
 	Adjudications   []triage.AdjudicationResult `json:"adjudications,omitempty"`
 	ConcordAnalysis ConcordAnalysis             `json:"concordAnalysis"`
@@ -78,9 +114,12 @@ type FindingResult struct {
 
 // NewFindingResult assembles a result row from every model's analysis, the voted
 // final verdict, and (when the vote was a tie) the judge panel's adjudications.
-// The concordAnalysis block derives from the judge matching the final verdict
-// if present, otherwise from the result matching the final verdict.
-func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64) FindingResult {
+// explorerErr is the shared gatherer's failure when one ran and failed; the
+// row then documents a failed gather instead of claiming context was
+// gathered. The concordAnalysis block derives from the judge matching the
+// final verdict if present, otherwise from the result matching the final
+// verdict.
+func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64, explorerErr string) FindingResult {
 	primary := pickPrimary(results, final)
 
 	just := ""
@@ -108,6 +147,7 @@ func NewFindingResult(f finding.Finding, results map[string]triage.Result, final
 		FinalVerdict:    string(final),
 		Agreement:       agreement,
 		ExplorerCostUSD: explorerCost,
+		ExplorerError:   explorerErr,
 		Results:         results,
 		Adjudications:   adjudications,
 		ConcordAnalysis: ConcordAnalysis{

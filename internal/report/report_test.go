@@ -17,7 +17,7 @@ func sampleRow() FindingResult {
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "raw SQL from request", CostUSD: 0.01},
 		"gemini": {Provider: "gemini", FinalVerdict: triage.ConfirmedReal, Summary: "confirmed sink", CostUSD: 0.002},
 	}
-	return NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
+	return NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
 }
 
 func TestConcordAnalysisMapping(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAdjudicationDrivesClassification(t *testing.T) {
 	}
 	adj := &triage.AdjudicationResult{FinalVerdict: triage.NotExploitable, Reasoning: "framework auto-escapes", KeyDecidingFactor: "template autoescape"}
 	adjudications := []triage.AdjudicationResult{*adj}
-	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0, "")
 	if row.ConcordAnalysis.Classification != "FALSE_POSITIVE" {
 		t.Fatalf("want FALSE_POSITIVE, got %s", row.ConcordAnalysis.Classification)
 	}
@@ -59,7 +59,7 @@ func TestAdjudicationsPanelRecorded(t *testing.T) {
 		{Judge: "strict", Model: "claude-opus", FinalVerdict: triage.NotExploitable, Reasoning: "strict says no taint"},
 		{Judge: "business", Model: "gemini", FinalVerdict: triage.LikelyReal, Reasoning: "business says exploitable"},
 	}
-	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0, "")
 	if len(row.Adjudications) != 2 {
 		t.Fatalf("want 2 adjudications recorded, got %d", len(row.Adjudications))
 	}
@@ -96,9 +96,14 @@ func TestMarkdownSurfacesJudgeError(t *testing.T) {
 		{Judge: "strict", Model: "claude", FinalVerdict: triage.Unlikely, Reasoning: "no taint"},
 		{Judge: "failing", Model: "claude", FinalVerdict: triage.NeedsMoreContext, Error: "boom"},
 	}
-	row := NewFindingResult(f, results, triage.Unlikely, "none", adjudications, 0)
+	row := NewFindingResult(f, results, triage.Unlikely, "none", adjudications, 0, "")
 	dir := t.TempDir()
-	if _, err := WriteMarkdown(dir, Meta{Date: "2026-01-01", InputFile: "x.sarif"}, []FindingResult{row}); err != nil {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models:    []ModelInfo{{Name: "claude", Model: "claude-opus"}, {Name: "gemini", Model: "gemini-2.5-flash"}},
+	}
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
 	}
 	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
@@ -118,9 +123,9 @@ func TestMarkdownAnalystTable(t *testing.T) {
 		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "claude sees it real"},
 		"strict": {Provider: "strict", FinalVerdict: triage.NotExploitable, Summary: "strict disagrees"},
 	}
-	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0)
+	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
 	dir := t.TempDir()
-	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", Analysts: []string{"strict"}}
+	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", Models: []ModelInfo{{Name: "claude", Model: "claude-opus"}}, Analysts: []string{"strict"}}
 	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +144,7 @@ func TestMarkdownAnalystTable(t *testing.T) {
 
 // Meta.Analysts marshals like Meta.Judges.
 func TestMetaAnalystsMarshal(t *testing.T) {
-	b, err := json.Marshal(Meta{Models: []string{"Claude (claude-opus-5)"}, Analysts: []string{"strict", "business"}})
+	b, err := json.Marshal(Meta{Models: []ModelInfo{{Name: "claude", Model: "claude-opus-5"}}, Analysts: []string{"strict", "business"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +159,7 @@ func TestCVSSValidVectorScored(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.ConfirmedReal, CVSSVector: vec},
 	}
-	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0)
+	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0, "")
 	if row.CVSS == nil {
 		t.Fatalf("valid vector should produce a scored CVSS40 block")
 	}
@@ -173,7 +178,7 @@ func TestCVSSInvalidVectorSurfacedNotDropped(t *testing.T) {
 	results := map[string]triage.Result{
 		"claude": {Provider: "claude", FinalVerdict: triage.ConfirmedReal, CVSSVector: bad},
 	}
-	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0)
+	row := NewFindingResult(f, results, triage.ConfirmedReal, "unanimous", nil, 0, "")
 	if row.CVSS != nil {
 		t.Fatalf("invalid vector must not produce a scored CVSS40 block, got %+v", row.CVSS)
 	}
@@ -190,7 +195,7 @@ func TestCVSSInvalidVectorSurfacedNotDropped(t *testing.T) {
 
 func TestWriteJSONAndMarkdown(t *testing.T) {
 	dir := t.TempDir()
-	meta := Meta{Date: "2026-08-26", InputFile: "scan.sarif", Models: []string{"Claude", "Gemini"}, ContextStrategy: "shared", Total: 1, TotalCostUSD: 0.012}
+	meta := Meta{Date: "2026-08-26", InputFile: "scan.sarif", Models: []ModelInfo{{Name: "claude", Model: "Claude"}, {Name: "gemini", Model: "Gemini"}}, ContextStrategy: "shared", Total: 1, TotalCostUSD: 0.012}
 	rows := []FindingResult{sampleRow()}
 
 	jp, err := WriteJSON(dir, meta, rows)
@@ -218,5 +223,247 @@ func TestWriteJSONAndMarkdown(t *testing.T) {
 	}
 	if filepath.Base(mp) != "report.md" {
 		t.Fatalf("unexpected report name %s", mp)
+	}
+}
+
+// voterRowLine returns the markdown table line containing marker, or "".
+func voterRowLine(s, marker string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.Contains(line, marker) {
+			return line
+		}
+	}
+	return ""
+}
+
+// Data-driven voter rows: every configured voter gets a row, rendered in
+// Meta.Models order (voter order), never in results-map iteration order. The
+// results map is populated in deliberately adversarial order (custom model
+// first) to prove the ordering comes from Meta.Models.
+func TestMarkdownVoterRowsDataDriven(t *testing.T) {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models: []ModelInfo{
+			{Name: "claude", Model: "claude-opus-5", ContextWindow: 128000, Priced: true},
+			{Name: "qwen", Model: "Qwen3.8-27B", ContextWindow: 262144, Priced: true},
+		},
+	}
+	results := map[string]triage.Result{
+		"qwen":   {Provider: "qwen", FinalVerdict: triage.Unlikely, Summary: "qwen note", CostUSD: 0.002},
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "claude note", CostUSD: 0.01},
+	}
+	row := NewFindingResult(finding.Finding{ID: "F040", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0, "")
+	dir := t.TempDir()
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+	s := string(md)
+	for _, want := range []string{"| claude (voter) |", "| qwen (voter) |", "claude note", "qwen note"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, s)
+		}
+	}
+	if i, j := strings.Index(s, "| claude (voter) |"), strings.Index(s, "| qwen (voter) |"); i > j {
+		t.Fatalf("voter rows must render in Meta.Models order (claude then qwen), not map order:\n%s", s)
+	}
+	// The header lists every configured model with its model id.
+	if !strings.Contains(s, "claude (claude-opus-5)") || !strings.Contains(s, "qwen (Qwen3.8-27B)") {
+		t.Fatalf("header must list all configured models with model ids:\n%s", s)
+	}
+}
+
+// An unpriced model carries a visible marker on its row and is named in the
+// header note; priced models carry neither.
+func TestMarkdownUnpricedMarkerAndHeaderNote(t *testing.T) {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models: []ModelInfo{
+			{Name: "claude", Model: "claude-opus-5", ContextWindow: 128000, Priced: true},
+			{Name: "qwen", Model: "Qwen3.8-27B", ContextWindow: 262144, Priced: false},
+		},
+	}
+	results := map[string]triage.Result{
+		"qwen":   {Provider: "qwen", FinalVerdict: triage.Unlikely, Summary: "local model", CostUSD: 0},
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "real", CostUSD: 0.01},
+	}
+	row := NewFindingResult(finding.Finding{ID: "F041", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "majority", nil, 0, "")
+	dir := t.TempDir()
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+	s := string(md)
+	if !strings.Contains(s, "**Unpriced models:** qwen") {
+		t.Fatalf("header note must name the unpriced model:\n%s", s)
+	}
+	qwenRow := voterRowLine(s, "qwen (voter)")
+	claudeRow := voterRowLine(s, "claude (voter)")
+	if qwenRow == "" || !strings.Contains(qwenRow, "unpriced") {
+		t.Fatalf("qwen row must carry the unpriced marker: %q", qwenRow)
+	}
+	if strings.Contains(claudeRow, "unpriced") {
+		t.Fatalf("priced claude row must not carry the marker: %q", claudeRow)
+	}
+	// The unpriced model still costs $0 and shows it.
+	if !strings.Contains(qwenRow, "$0.0000") {
+		t.Fatalf("unpriced row must show a $0 cost: %q", qwenRow)
+	}
+}
+
+// A spec-priced model with an explicit $0 price is Priced=true: it costs $0
+// but must NOT carry the unpriced marker, and no unpriced header note appears.
+func TestExplicitZeroPricePricedNoMarker(t *testing.T) {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models:    []ModelInfo{{Name: "claude", Model: "claude-opus-5", ContextWindow: 128000, Priced: true}},
+	}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, Summary: "real", CostUSD: 0},
+	}
+	row := NewFindingResult(finding.Finding{ID: "F042", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}, results, triage.LikelyReal, "unanimous", nil, 0, "")
+	dir := t.TempDir()
+	if _, err := WriteMarkdown(dir, meta, []FindingResult{row}); err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+	s := string(md)
+	claudeRow := voterRowLine(s, "claude (voter)")
+	if claudeRow == "" {
+		t.Fatalf("claude row missing:\n%s", s)
+	}
+	if strings.Contains(claudeRow, "unpriced") {
+		t.Fatalf("explicitly priced model (even at $0) must not carry the marker: %q", claudeRow)
+	}
+	if strings.Contains(s, "**Unpriced models:**") {
+		t.Fatalf("no unpriced header note when every model is priced:\n%s", s)
+	}
+	if !strings.Contains(claudeRow, "$0.0000") {
+		t.Fatalf("$0 price must still render as a cost: %q", claudeRow)
+	}
+}
+
+// metadata.models serializes as a structured per-model list: name, model
+// id, context window, and priced flag for every configured voter, in order.
+func TestMetaModelsStructuredJSON(t *testing.T) {
+	meta := Meta{
+		Date:      "2026-01-01",
+		InputFile: "x.sarif",
+		Models: []ModelInfo{
+			{Name: "qwen", Model: "Qwen3.8-27B", ContextWindow: 262144, Priced: false},
+			{Name: "claude", Model: "claude-opus-5", ContextWindow: 128000, Priced: true},
+		},
+	}
+	dir := t.TempDir()
+	jp, err := WriteJSON(dir, meta, []FindingResult{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(jp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Metadata struct {
+			Models []struct {
+				Name          string `json:"name"`
+				Model         string `json:"model"`
+				ContextWindow int    `json:"context_window"`
+				Priced        bool   `json:"priced"`
+			} `json:"models"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("results.json is not valid JSON: %v", err)
+	}
+	if len(payload.Metadata.Models) != 2 {
+		t.Fatalf("metadata.models must be a two-element array, got %d: %s", len(payload.Metadata.Models), raw)
+	}
+	q := payload.Metadata.Models[0]
+	if q.Name != "qwen" || q.Model != "Qwen3.8-27B" || q.ContextWindow != 262144 || q.Priced {
+		t.Fatalf("metadata.models[0] wrong: %+v", q)
+	}
+	c := payload.Metadata.Models[1]
+	if c.Name != "claude" || c.Model != "claude-opus-5" || c.ContextWindow != 128000 || !c.Priced {
+		t.Fatalf("metadata.models[1] wrong: %+v", c)
+	}
+	// priced:false must serialize explicitly (no omitempty regression).
+	if !strings.Contains(string(raw), `"priced": false`) {
+		t.Fatalf("priced:false must serialize explicitly: %s", raw)
+	}
+}
+
+// The explorer row renders whenever a gatherer ran — including an unpriced
+// gatherer at $0 — and not when no gatherer ran. A shared strategy with a
+// srcroot always gathers; per-model and shared-without-srcroot never do.
+func TestExplorerRowRendersWhenGathererRan(t *testing.T) {
+	f := finding.Finding{ID: "F050", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, CostUSD: 0.01},
+	}
+	zeroRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
+	costRow := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0.005, "")
+
+	cases := []struct {
+		name string
+		meta Meta
+		row  FindingResult
+		want bool
+	}{
+		{"unpriced gatherer: shared + srcroot, $0 cost", Meta{ContextStrategy: "shared", SrcRoot: "/repo"}, zeroRow, true},
+		{"priced gatherer: shared + srcroot, nonzero cost", Meta{ContextStrategy: "shared", SrcRoot: "/repo"}, costRow, true},
+		{"per-model: no shared gatherer, $0 cost", Meta{ContextStrategy: "per-model", SrcRoot: "/repo"}, zeroRow, false},
+		{"shared without srcroot: no gatherer, $0 cost", Meta{ContextStrategy: "shared"}, zeroRow, false},
+	}
+	const wantRow = "| explorer |"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, err := WriteMarkdown(dir, tc.meta, []FindingResult{tc.row}); err != nil {
+				t.Fatal(err)
+			}
+			md, _ := os.ReadFile(filepath.Join(dir, "report.md"))
+			if got := strings.Contains(string(md), wantRow); got != tc.want {
+				t.Fatalf("explorer row rendered = %v, want %v:\n%s", got, tc.want, md)
+			}
+		})
+	}
+}
+
+// A failed shared gather must not claim "shared context gathering": the
+// explorer row shows the failure and results.json carries explorer_error, so
+// a run triaged on metadata alone is traceable in the durable artifacts.
+func TestExplorerRowShowsGatherFailure(t *testing.T) {
+	f := finding.Finding{ID: "F060", File: "a.go", VulnType: "SQLi", Severity: "HIGH"}
+	results := map[string]triage.Result{
+		"claude": {Provider: "claude", FinalVerdict: triage.LikelyReal, CostUSD: 0.01},
+	}
+	row := NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0.005, "400 unknown model id")
+	dir := t.TempDir()
+	meta := Meta{Date: "2026-01-01", InputFile: "x.sarif", ContextStrategy: "shared", SrcRoot: "/repo"}
+
+	jp, err := WriteJSON(dir, meta, []FindingResult{row})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(jp)
+	if !strings.Contains(string(raw), `"explorer_error": "400 unknown model id"`) {
+		t.Fatalf("results.json must carry explorer_error for a failed gather: %s", raw)
+	}
+
+	mp, err := WriteMarkdown(dir, meta, []FindingResult{row})
+	if err != nil {
+		t.Fatal(err)
+	}
+	md, _ := os.ReadFile(mp)
+	s := string(md)
+	if !strings.Contains(s, "| explorer | — | $0.0050 | failed: 400 unknown model id |") {
+		t.Fatalf("explorer row must show the gather failure:\n%s", s)
+	}
+	if strings.Contains(s, "shared context gathering") {
+		t.Fatalf("a failed gather must not claim context gathering:\n%s", s)
 	}
 }

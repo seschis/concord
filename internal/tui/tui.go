@@ -26,6 +26,7 @@ import (
 type Header struct {
 	InputFile string
 	Models    []string
+	Unpriced  []string // names of voters without a price (marked, costed at $0)
 	Analysts  []string // analyst-panel persona names, if any
 	Strategy  string
 	SrcRoot   string
@@ -300,6 +301,9 @@ func (m *Model) View() string {
 	b.WriteString(headerStyle.Render("concord") + dimStyle.Render(
 		fmt.Sprintf("  %s · %s · effort=%s", short(m.header.InputFile), m.header.Strategy, m.header.Effort)) + "\n")
 	b.WriteString(dimStyle.Render("models: "+models) + "\n")
+	if len(m.header.Unpriced) > 0 {
+		b.WriteString(dimStyle.Render("unpriced: "+strings.Join(m.header.Unpriced, ", ")+" (no price set; costed at $0)") + "\n")
+	}
 	if len(m.header.Analysts) > 0 {
 		b.WriteString(dimStyle.Render("analysts: "+strings.Join(m.header.Analysts, ", ")) + "\n")
 	}
@@ -315,7 +319,7 @@ func (m *Model) View() string {
 	elapsed := time.Since(m.start).Round(time.Second)
 	fmt.Fprintf(&b, "%s  %d/%d  %s  %s   %s\n",
 		m.bar.ViewAs(pct), m.doneCount, m.total,
-		costStyle.Render(fmt.Sprintf("$%.4f", m.totalCost)),
+		m.costLabel(),
 		dimStyle.Render(elapsed.String()),
 		m.tallyLine())
 
@@ -385,7 +389,7 @@ func (m *Model) View() string {
 		case m.saveReports:
 			b.WriteString("\n" + headerStyle.Render(fmt.Sprintf("Stopped early. %d/%d findings · ", m.doneCount, m.total)) +
 				m.tallyLine() + "  " +
-				costStyle.Render(fmt.Sprintf("$%.4f", m.totalCost)) +
+				m.costLabel() +
 				dimStyle.Render("  "+time.Since(m.start).Round(time.Second).String()) +
 				dimStyle.Render("  (writing partial report)") + "\n")
 		case m.err != nil:
@@ -393,11 +397,21 @@ func (m *Model) View() string {
 		default:
 			b.WriteString("\n" + headerStyle.Render(fmt.Sprintf("Done. %d findings · ", m.total)) +
 				m.tallyLine() + "  " +
-				costStyle.Render(fmt.Sprintf("$%.4f", m.totalCost)) +
+				m.costLabel() +
 				dimStyle.Render("  "+time.Since(m.start).Round(time.Second).String()) + "\n")
 		}
 	}
 	return b.String()
+}
+
+// costLabel renders the live total cost, marked when any unpriced model
+// contributes to it at $0.
+func (m *Model) costLabel() string {
+	s := costStyle.Render(fmt.Sprintf("$%.4f", m.totalCost))
+	if len(m.header.Unpriced) > 0 {
+		s += dimStyle.Render(" (unpriced: " + strings.Join(m.header.Unpriced, ", ") + ")")
+	}
+	return s
 }
 
 func cvssStyle(score float64) lipgloss.Style {

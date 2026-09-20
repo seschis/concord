@@ -41,7 +41,7 @@ func TestTriageOneJudgePanelResolvesTie(t *testing.T) {
 	voters := []triage.Result{
 		{Provider: "claude", FinalVerdict: triage.ConfirmedReal},
 		{Provider: "gemini", FinalVerdict: triage.LikelyReal},
-		{Provider: "codex", FinalVerdict: triage.Unlikely},
+		{Provider: "openai", FinalVerdict: triage.Unlikely},
 		{Provider: "azure", FinalVerdict: triage.NotExploitable},
 	}
 	strict := &fakeJudge{name: "strict", model: "claude", verdict: triage.NotExploitable, cost: 0.1}
@@ -125,7 +125,7 @@ func TestTriageOneFailingJudgeDoesNotSwingPanel(t *testing.T) {
 	voters := []triage.Result{
 		{Provider: "claude", FinalVerdict: triage.ConfirmedReal},
 		{Provider: "gemini", FinalVerdict: triage.LikelyReal},
-		{Provider: "codex", FinalVerdict: triage.Unlikely},
+		{Provider: "openai", FinalVerdict: triage.Unlikely},
 		{Provider: "azure", FinalVerdict: triage.NotExploitable},
 	}
 	ok1 := &fakeJudge{name: "strict", model: "claude", verdict: triage.NotExploitable}
@@ -142,7 +142,7 @@ func TestTriageOneMajoritySkipsPanel(t *testing.T) {
 	voters := []triage.Result{
 		{Provider: "claude", FinalVerdict: triage.ConfirmedReal},
 		{Provider: "gemini", FinalVerdict: triage.LikelyReal},
-		{Provider: "codex", FinalVerdict: triage.Unlikely},
+		{Provider: "openai", FinalVerdict: triage.Unlikely},
 	}
 	strict := &fakeJudge{name: "strict", model: "claude", verdict: triage.NotExploitable}
 	e := &Engine{Strategy: fakeStrategy{results: voters}, Judges: []Judge{strict}}

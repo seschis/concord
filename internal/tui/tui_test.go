@@ -208,6 +208,66 @@ func TestViewAnalystHeader(t *testing.T) {
 	}
 }
 
+// TestViewUnpricedHeaderAndCostMarker verifies the header gains an unpriced
+// note line and the cost-total row carries the marker when a model has no
+// price (it contributes $0 to the total).
+func TestViewUnpricedHeaderAndCostMarker(t *testing.T) {
+	h := Header{
+		InputFile: "/tmp/findings.csv",
+		Models:    []string{"claude (claude-opus-5)", "qwen (Qwen3.8-27B)"},
+		Unpriced:  []string{"qwen"},
+		Strategy:  "shared",
+	}
+	m := NewModel(h, nil, time.Now())
+	m.apply(prog.Event{Kind: prog.RunStart, Total: 1})
+	m.apply(prog.Event{Kind: prog.FindingStart, Total: 1, FindingIdx: 0, FindingID: "F1", VulnType: "SQLi", Severity: "HIGH"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "qwen", Role: prog.RoleVoter, Verdict: "UNLIKELY"})
+
+	out := m.View()
+	if !strings.Contains(out, "unpriced: qwen") {
+		t.Fatalf("View() missing the unpriced header note:\n%s", out)
+	}
+	// The cost-total line (the one carrying the running total) carries the marker.
+	costLine := ""
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "$0.0000") {
+			costLine = line
+			break
+		}
+	}
+	if costLine == "" || !strings.Contains(costLine, "unpriced: qwen") {
+		t.Fatalf("cost-total row must carry the unpriced marker:\n%s", out)
+	}
+}
+
+// TestViewPricedHasNoUnpricedMarker is the inverse guard: a fully priced run
+// renders no unpriced note anywhere.
+func TestViewPricedHasNoUnpricedMarker(t *testing.T) {
+	h := Header{InputFile: "/tmp/findings.csv", Models: []string{"claude (claude-opus-5)"}, Strategy: "shared"}
+	m := NewModel(h, nil, time.Now())
+	m.apply(prog.Event{Kind: prog.RunStart, Total: 1})
+	m.apply(prog.Event{Kind: prog.FindingStart, Total: 1, FindingIdx: 0, FindingID: "F1", VulnType: "SQLi", Severity: "HIGH"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "claude", Role: prog.RoleVoter, Verdict: "LIKELY_REAL", CostUSD: 0.004})
+	if out := m.View(); strings.Contains(out, "unpriced") {
+		t.Fatalf("fully priced run must not render an unpriced marker:\n%s", out)
+	}
+}
+
+// TestVoterRowCustomName is a data-driven regression guard: a voter row is
+// created from whatever provider name the event carries (no hardcoded model
+// set), so a custom model name renders its own row.
+func TestVoterRowCustomName(t *testing.T) {
+	m := NewModel(Header{Models: []string{"qwen (Qwen3.8-27B)"}}, nil, time.Now())
+	m.apply(prog.Event{Kind: prog.FindingStart, FindingID: "F1"})
+	m.apply(prog.Event{Kind: prog.ModelDone, Provider: "qwen", Role: prog.RoleVoter, Verdict: "UNLIKELY"})
+	if len(m.rows) != 1 || m.rows[0].label != "qwen" {
+		t.Fatalf("custom-name voter row missing: %+v", m.rows)
+	}
+	if out := m.View(); !strings.Contains(out, "qwen") {
+		t.Fatalf("View() missing the custom model row:\n%s", out)
+	}
+}
+
 // TestFindingStartResetsRows verifies a new finding clears the prior finding's
 // per-model rows so stale state never bleeds across findings.
 func TestFindingStartResetsRows(t *testing.T) {

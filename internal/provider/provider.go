@@ -32,7 +32,7 @@ type AnalyzeInput struct {
 
 // Provider is one model backend.
 type Provider interface {
-	Name() string // "claude" | "gemini" | "codex" | "azure"
+	Name() string // "claude" | "gemini" | "openai" | "azure" (or the spec's Name for custom models)
 	Model() string
 	Analyze(ctx context.Context, f finding.Finding, in AnalyzeInput) (triage.Result, error)
 }

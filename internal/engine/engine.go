@@ -59,7 +59,7 @@ func (e *Engine) TriageOne(ctx context.Context, f finding.Finding) (report.Findi
 	for _, r := range run.Results {
 		resultsMap[r.Provider] = r
 	}
-	return report.NewFindingResult(f, resultsMap, final, agreement, adjudications, run.ExtraCost), cost
+	return report.NewFindingResult(f, resultsMap, final, agreement, adjudications, run.ExtraCost, run.GatherErr), cost
 }
 
 // runJudges runs every judge on the disagreement concurrently and returns their
