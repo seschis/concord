@@ -1,5 +1,9 @@
 # concord
 
+<p align="center">
+  <img src="assets/robot-judges.png" alt="A panel of robot judges weighing in on triaged security findings" width="900">
+</p>
+
 ![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8)
 ![CI](https://github.com/seschis/concord/workflows/ci/badge.svg)
 ![Release](https://img.shields.io/github/v/release/seschis/concord)
