@@ -36,6 +36,7 @@ release:
 
 brews:
   - name: harmonia
+    directory: Formula
     repository:
       owner: seschis
       name: homebrew-tap
