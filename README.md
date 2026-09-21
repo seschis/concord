@@ -4,7 +4,7 @@
   <img src="assets/robot-judges.png" alt="A panel of robot judges weighing in on triaged security findings" width="900">
 </p>
 
-![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8)
+![Go](https://img.shields.io/badge/go-1.27%2B-00ADD8)
 ![CI](https://github.com/seschis/concord/workflows/ci/badge.svg)
 ![Release](https://img.shields.io/github/v/release/seschis/concord)
 ![License](https://img.shields.io/badge/License-Apache--2.0-blue)
@@ -184,7 +184,7 @@ validation is effective and the finding is not exploitable as deployed.
 
 Download a prebuilt binary from the [releases page](https://github.com/seschis/concord/releases).
 
-Or build from source (Go 1.26+):
+Or build from source (Go 1.27+):
 
 ```bash
 go build -o concord ./cmd/concord

@@ -31,7 +31,7 @@ make check     # fmt + vet + test
 make snapshot  # local goreleaser build, no publish
 ```
 
-Go 1.26+. LLM dependency is `github.com/tmc/langchaingo` (pinned v0.1.14).
+Go 1.27.1+. LLM dependency is `github.com/tmc/langchaingo` (pinned v0.1.14).
 Model config is `github.com/BurntSushi/toml` (a direct dependency of the
 provider package, strict-decoded `concord.toml`).
 
