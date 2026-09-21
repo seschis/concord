@@ -1,8 +1,8 @@
 # concord
 
 ![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8)
-![CI](https://img.shields.io/badge/ci-github%20actions-4183C4)
-![Release](https://img.shields.io/badge/release-goreleaser-00ADD8)
+![CI](https://github.com/seschis/concord/workflows/ci/badge.svg)
+![Release](https://img.shields.io/github/v/release/seschis/concord)
 ![License](https://img.shields.io/badge/License-Apache--2.0-blue)
 
 `concord` is a Go CLI that triages security scanner findings with multiple LLMs.
