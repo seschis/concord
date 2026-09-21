@@ -35,7 +35,7 @@ const defaultContextWindow = 128000
 // explicit local endpoint with no key resolvable anywhere. The openai client
 // requires a token at construction, and a local server without auth never
 // checks the value, so a placeholder keeps keyless local endpoints usable.
-const placeholderToken = "concord-local-no-auth"
+const placeholderToken = "harmonia-local-no-auth"
 
 // ModelSpec describes one model by data: which protocol to speak, where, with
 // which credentials, and what the model costs. Every provider — preset or

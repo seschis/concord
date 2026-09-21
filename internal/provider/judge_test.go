@@ -7,9 +7,9 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/progress"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/progress"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // judgeScriptedModel is a scripted llms.Model that records the

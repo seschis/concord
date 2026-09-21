@@ -3,8 +3,8 @@ package provider
 import (
 	"context"
 
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // Judge is one member of the adjudication panel: a named persona (a system

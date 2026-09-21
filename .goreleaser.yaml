@@ -1,14 +1,14 @@
 version: 2
-project_name: concord
+project_name: harmonia
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: concord
-    main: ./cmd/concord
-    binary: concord
+  - id: harmonia
+    main: ./cmd/harmonia
+    binary: harmonia
     env:
       - CGO_ENABLED=0
     goos:
@@ -32,15 +32,15 @@ checksum:
 release:
   github:
     owner: seschis
-    name: concord
+    name: harmonia
 
 brews:
-  - name: concord
+  - name: harmonia
     repository:
       owner: seschis
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: "https://github.com/seschis/concord"
+    homepage: "https://github.com/seschis/harmonia"
     description: "A Go CLI that triages security scanner findings with multiple LLMs."
     license: "Apache-2.0"

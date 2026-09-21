@@ -1,4 +1,4 @@
-module github.com/seschis/concord
+module github.com/seschis/harmonia
 
 go 1.27.1
 

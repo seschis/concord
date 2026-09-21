@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // parseCSV reads a CSV whose first row is a header, mapping columns to finding

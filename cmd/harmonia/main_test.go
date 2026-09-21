@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seschis/concord/internal/provider"
-	"github.com/seschis/concord/internal/report"
+	"github.com/seschis/harmonia/internal/provider"
+	"github.com/seschis/harmonia/internal/report"
 )
 
 // clearCredentialEnvs blanks every credential environment variable the spec
@@ -260,7 +260,7 @@ func TestDiscoverConfigFile(t *testing.T) {
 
 	explicit := filepath.Join(t.TempDir(), "explicit.toml")
 	writeFile(t, explicit, "# explicit\n")
-	writeFile(t, "concord.toml", "# cwd\n")
+	writeFile(t, "harmonia.toml", "# cwd\n")
 
 	// --config wins over cwd.
 	got, err := discoverConfigFile(&config{configFile: explicit}, "findings.sarif")
@@ -275,17 +275,17 @@ func TestDiscoverConfigFile(t *testing.T) {
 
 	// cwd file found.
 	got, err = discoverConfigFile(&config{}, "findings.sarif")
-	if err != nil || got != "concord.toml" {
-		t.Fatalf("cwd concord.toml should be found, got %q (%v)", got, err)
+	if err != nil || got != "harmonia.toml" {
+		t.Fatalf("cwd harmonia.toml should be found, got %q (%v)", got, err)
 	}
 
 	// Input-dir file found when cwd has none.
-	os.Remove("concord.toml")
+	os.Remove("harmonia.toml")
 	inDir := t.TempDir()
-	writeFile(t, filepath.Join(inDir, "concord.toml"), "# input dir\n")
+	writeFile(t, filepath.Join(inDir, "harmonia.toml"), "# input dir\n")
 	got, err = discoverConfigFile(&config{}, filepath.Join(inDir, "findings.sarif"))
-	if err != nil || got != filepath.Join(inDir, "concord.toml") {
-		t.Fatalf("input-dir concord.toml should be found, got %q (%v)", got, err)
+	if err != nil || got != filepath.Join(inDir, "harmonia.toml") {
+		t.Fatalf("input-dir harmonia.toml should be found, got %q (%v)", got, err)
 	}
 
 	// No file anywhere -> presets only.
@@ -307,7 +307,7 @@ context_window = 262144
 
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "concord.toml")
+	path := filepath.Join(t.TempDir(), "harmonia.toml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}

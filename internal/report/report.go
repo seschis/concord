@@ -1,5 +1,5 @@
 // Package report writes the JSON results file and the Markdown report. Each
-// finding's JSON entry carries a concordAnalysis block with the verdict's
+// finding's JSON entry carries a harmoniaAnalysis block with the verdict's
 // classification, justification, and remediation detail.
 package report
 
@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/seschis/concord/internal/cvss"
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/cvss"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // ModelInfo is one configured voter in the run-level metadata: its spec name,
@@ -65,9 +65,9 @@ func UnpricedNames(models []ModelInfo) []string {
 	return out
 }
 
-// ConcordAnalysis is the per-finding verdict block embedded in results.json
-// under the "concordAnalysis" key.
-type ConcordAnalysis struct {
+// HarmoniaAnalysis is the per-finding verdict block embedded in results.json
+// under the "harmoniaAnalysis" key.
+type HarmoniaAnalysis struct {
 	Classification string `json:"classification"`
 	Justification  string `json:"justification"`
 	WorkDetail     string `json:"workDetail"`
@@ -94,29 +94,29 @@ type CVSSParseError struct {
 // FindingResult is one finding plus every model's analysis and the derived
 // classification.
 type FindingResult struct {
-	ID              string                      `json:"id"`
-	File            string                      `json:"file"`
-	Line            int                         `json:"line,omitempty"`
-	Type            string                      `json:"type"`
-	Severity        string                      `json:"severity"`
-	CWE             string                      `json:"cwe,omitempty"`
-	Description     string                      `json:"description"`
-	FinalVerdict    string                      `json:"final_verdict"`
-	Agreement       string                      `json:"agreement"`
-	CVSS            *CVSS40                     `json:"cvss40,omitempty"`
-	CVSSError       *CVSSParseError             `json:"cvss40_error,omitempty"`
-	ExplorerCostUSD float64                     `json:"explorer_cost_usd,omitempty"`
-	ExplorerError   string                      `json:"explorer_error,omitempty"`
-	Results         map[string]triage.Result    `json:"results"`
-	Adjudications   []triage.AdjudicationResult `json:"adjudications,omitempty"`
-	ConcordAnalysis ConcordAnalysis             `json:"concordAnalysis"`
+	ID               string                      `json:"id"`
+	File             string                      `json:"file"`
+	Line             int                         `json:"line,omitempty"`
+	Type             string                      `json:"type"`
+	Severity         string                      `json:"severity"`
+	CWE              string                      `json:"cwe,omitempty"`
+	Description      string                      `json:"description"`
+	FinalVerdict     string                      `json:"final_verdict"`
+	Agreement        string                      `json:"agreement"`
+	CVSS             *CVSS40                     `json:"cvss40,omitempty"`
+	CVSSError        *CVSSParseError             `json:"cvss40_error,omitempty"`
+	ExplorerCostUSD  float64                     `json:"explorer_cost_usd,omitempty"`
+	ExplorerError    string                      `json:"explorer_error,omitempty"`
+	Results          map[string]triage.Result    `json:"results"`
+	Adjudications    []triage.AdjudicationResult `json:"adjudications,omitempty"`
+	HarmoniaAnalysis HarmoniaAnalysis            `json:"harmoniaAnalysis"`
 }
 
 // NewFindingResult assembles a result row from every model's analysis, the voted
 // final verdict, and (when the vote was a tie) the judge panel's adjudications.
 // explorerErr is the shared gatherer's failure when one ran and failed; the
 // row then documents a failed gather instead of claiming context was
-// gathered. The concordAnalysis block derives from the judge matching the
+// gathered. The harmoniaAnalysis block derives from the judge matching the
 // final verdict if present, otherwise from the result matching the final
 // verdict.
 func NewFindingResult(f finding.Finding, results map[string]triage.Result, final triage.Verdict, agreement string, adjudications []triage.AdjudicationResult, explorerCost float64, explorerErr string) FindingResult {
@@ -150,7 +150,7 @@ func NewFindingResult(f finding.Finding, results map[string]triage.Result, final
 		ExplorerError:   explorerErr,
 		Results:         results,
 		Adjudications:   adjudications,
-		ConcordAnalysis: ConcordAnalysis{
+		HarmoniaAnalysis: HarmoniaAnalysis{
 			Classification: triage.Classification(final),
 			Justification:  just,
 			WorkDetail:     work,

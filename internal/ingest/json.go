@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // parseJSON handles our scanner format, a {"findings":[...]} object, or a bare

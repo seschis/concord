@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/progress"
-	"github.com/seschis/concord/internal/transcript"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/progress"
+	"github.com/seschis/harmonia/internal/transcript"
 )
 
 type recordingSink struct{ events []progress.Event }

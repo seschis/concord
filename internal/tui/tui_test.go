@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	prog "github.com/seschis/concord/internal/progress"
+	prog "github.com/seschis/harmonia/internal/progress"
 )
 
 // key builds a tea.KeyMsg for a single rune, matching how Bubble Tea delivers

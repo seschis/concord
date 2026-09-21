@@ -1,4 +1,4 @@
-# CLAUDE.md — concord
+# CLAUDE.md — harmonia
 
 Guidance for Claude Code working in this repo. Read `DESIGN.md` for the full
 architecture; this file captures the non-obvious things that will trip you up.
@@ -7,7 +7,7 @@ architecture; this file captures the non-obvious things that will trip you up.
 
 An experimental Go tool that triages security scanner findings with LLMs —
 the four built-in presets (Claude, Gemini, OpenAI, Azure OpenAI) plus any
-custom models defined in `concord.toml` or with `--add-model` (see *Common
+custom models defined in `harmonia.toml` or with `--add-model` (see *Common
 changes* → *Add a model via config*) — takes a majority vote, and breaks ties
 with a **judge panel** (several persona-driven judges, often on the same model,
 whose verdicts are combined by the same category-majority vote — see the note
@@ -19,13 +19,13 @@ Hard constraints, do not violate these.
 
 - Local files only. No backend calls, no LLM proxy, no usage reporting.
 - No telemetry. No OpenTelemetry, no OpenLIT.
-- Output is `results.json` (with a `concordAnalysis` block) plus
+- Output is `results.json` (with a `harmoniaAnalysis` block) plus
   `report.md`. Do not write an enhanced SARIF.
 
 ## Build and test
 
 ```
-make build     # -> ./bin/concord, version-stamped from git describe
+make build     # -> ./bin/harmonia, version-stamped from git describe
 make test      # go test ./...
 make check     # fmt + vet + test
 make snapshot  # local goreleaser build, no publish
@@ -33,7 +33,7 @@ make snapshot  # local goreleaser build, no publish
 
 Go 1.27.1+. LLM dependency is `github.com/tmc/langchaingo` (pinned v0.1.14).
 Model config is `github.com/BurntSushi/toml` (a direct dependency of the
-provider package, strict-decoded `concord.toml`).
+provider package, strict-decoded `harmonia.toml`).
 
 ## Package layout and the import rule
 
@@ -47,7 +47,7 @@ cvss       (no internal deps)              (CVSS 4.0 vector parsing, scoring, se
 bundle     (no internal deps)              (context-dir export/import: manifest, scan, tar.gz bundle)
 triage     -> finding                      (Result, Verdict, prompts, parsing, adjudication types)
 agent      -> langchaingo/llms only        (tool loop + sandboxed file tools; NO finding/triage/provider)
-provider   -> agent, finding, progress, transcript, triage   (LLMProvider base + ModelSpec/NewFromSpec protocol factory + concord.toml config + pricing)
+provider   -> agent, finding, progress, transcript, triage   (LLMProvider base + ModelSpec/NewFromSpec protocol factory + harmonia.toml config + pricing)
 ingest     -> finding
 report     -> cvss, finding, triage
 engine     -> provider, report, progress, triage, finding   (strategy, vote, adjudicate orchestrator)
@@ -204,7 +204,7 @@ swallowed — it must never break a triage run.
 ## Common changes
 
 - **Add a model via config.** Models are data, not code: a `[[models]]` entry
-  in `concord.toml` (discovered in the cwd, then the input file's directory;
+  in `harmonia.toml` (discovered in the cwd, then the input file's directory;
   `--config PATH` wins) or a one-shot `--add-model "name,key=value,..."` flag
   (repeatable). Keys: `protocol`, `endpoint`, `api_key`, `model`,
   `context_window`, `price_in`, `price_out`, `bedrock`, `region`,
@@ -212,7 +212,7 @@ swallowed — it must never break a triage run.
   endpoint is the root including `/v1`; anthropic any base URL); `gemini` and
   `azure` are preset-only. The four presets are `ModelSpec` values in
   `provider/spec.go` run through the same `NewFromSpec` factory as custom
-  specs, so there is no registration step: `cmd/concord/main.go` `resolveSpecs`
+  specs, so there is no registration step: `cmd/harmonia/main.go` `resolveSpecs`
   merges the layers per field (flag > file > preset), strict-decodes the TOML
   (unknown key or duplicate name = error), validates (`context_window >= 4096`,
   required for custom specs; name `[a-z0-9-]`; reserved persona names
@@ -224,7 +224,7 @@ swallowed — it must never break a triage run.
    A constructor-level change is only needed for a genuinely NEW protocol: add
    a case in `provider.NewFromSpec` (the one-way import graph holds — `provider`
    is the only package importing the LLM client libraries, langchaingo/llms
-   and anthropic-sdk-go; BurntSushi/toml for concord.toml and
+   and anthropic-sdk-go; BurntSushi/toml for harmonia.toml and
    aws-sdk-go-v2/config for Bedrock are its documented direct dependencies),
    a pricing
   table in `provider/pricing.go` (`costFunc` takes
@@ -250,7 +250,7 @@ swallowed — it must never break a triage run.
   appended so every judge emits the same JSON schema); add a persona by adding a
   map entry there. `--judge name|name=/path.md` and `--judge-model name=provider`
   (both repeatable) are parsed by `buildJudges`/`splitSpec` in
-  `cmd/concord/main.go`. No `--judge` → a single `adjudicator` judge using
+  `cmd/harmonia/main.go`. No `--judge` → a single `adjudicator` judge using
   `triage.AdjudicationSystemPrompt` on the preferred model (legacy behavior).
   Each judge is a single-shot call through
   `(*provider.LLMProvider).AdjudicateAs` (label/system overridable); a failed
@@ -271,7 +271,7 @@ swallowed — it must never break a triage run.
   `*LLMProvider` (same client/model/pricing) with a distinct label and a
   persona-lens system prompt (`triage.BuildAnalystSystemPrompt` = base triage
   prompt + lens, the JSON contract preserved). Analysts are appended to
-  `e.Voters` in `cmd/concord/main.go` (`buildAnalysts`), so the existing
+  `e.Voters` in `cmd/harmonia/main.go` (`buildAnalysts`), so the existing
   `Vote`/`Strategy` handle them unchanged. `--context-strategy shared` keeps
   them cheap (single-shot over the one shared brief); `per-model` runs an
   agentic loop per analyst (a banner note warns). Report: `report.Meta.Analysts`

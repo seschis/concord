@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/provider"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/provider"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // Opts carries the per-run knobs a strategy needs.

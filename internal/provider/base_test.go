@@ -7,8 +7,8 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // recordingModel is a scripted llms.Model that records the CallOptions of

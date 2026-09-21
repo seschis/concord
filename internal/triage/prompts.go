@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // SystemPrompt is the shared three-part triage instruction. Every provider

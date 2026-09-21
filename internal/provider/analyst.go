@@ -1,6 +1,6 @@
 package provider
 
-import "github.com/seschis/concord/internal/triage"
+import "github.com/seschis/harmonia/internal/triage"
 
 // NewAnalyst builds a triage-analyzer voter: a clone of the preferred model's
 // provider (same client, model, and pricing) that carries a distinct label and a

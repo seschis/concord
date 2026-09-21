@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // AdjudicationResult is the outcome of a single judge resolving (or weighing in

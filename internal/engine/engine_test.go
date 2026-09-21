@@ -5,9 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/provider"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/provider"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 type fakeStrategy struct {

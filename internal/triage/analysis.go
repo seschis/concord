@@ -34,7 +34,7 @@ type Result struct {
 	Error          string            `json:"error,omitempty"`
 }
 
-// Classification maps a verdict to the concordAnalysis classification.
+// Classification maps a verdict to the harmoniaAnalysis classification.
 func Classification(v Verdict) string {
 	switch v {
 	case ConfirmedReal, LikelyReal:

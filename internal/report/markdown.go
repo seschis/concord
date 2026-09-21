@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // WriteMarkdown writes a human-readable report into dir and returns its path.
@@ -97,7 +97,7 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 			fmt.Fprintf(&b, "> **CVSS vector dropped (invalid):** `%s` — %s\n\n", r.CVSSError.Vector, r.CVSSError.Error)
 		}
 		fmt.Fprintf(&b, "**Final verdict:** %s  (agreement: %s)\n\n", r.FinalVerdict, r.Agreement)
-		fmt.Fprintf(&b, "**Classification:** %s\n\n", r.ConcordAnalysis.Classification)
+		fmt.Fprintf(&b, "**Classification:** %s\n\n", r.HarmoniaAnalysis.Classification)
 
 		if recharacterized {
 			b.WriteString("> **Recharacterized.** The scanner's original description contained claims ")
@@ -115,8 +115,8 @@ func WriteMarkdown(dir string, meta Meta, results []FindingResult) (string, erro
 			}
 		} else if primary.Summary != "" {
 			fmt.Fprintf(&b, "%s\n\n", primary.Summary)
-		} else if r.ConcordAnalysis.Justification != "" {
-			fmt.Fprintf(&b, "%s\n\n", r.ConcordAnalysis.Justification)
+		} else if r.HarmoniaAnalysis.Justification != "" {
+			fmt.Fprintf(&b, "%s\n\n", r.HarmoniaAnalysis.Justification)
 		}
 
 		// Analysis section with the triage's reasoning chain.

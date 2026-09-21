@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // Minimal SARIF 2.1.0 subset, enough to extract findings from CodeQL, Semgrep,

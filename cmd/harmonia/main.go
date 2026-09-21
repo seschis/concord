@@ -1,4 +1,4 @@
-// Command concord is an experimental multi-model security finding triage
+// Command harmonia is an experimental multi-model security finding triage
 // tool: ingest -> context strategy -> multi-model vote -> judge-panel
 // adjudication of ties -> JSON output. Reads and writes local files only.
 package main
@@ -14,20 +14,20 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/engine"
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/ingest"
-	iprog "github.com/seschis/concord/internal/progress"
-	"github.com/seschis/concord/internal/provider"
-	"github.com/seschis/concord/internal/report"
-	"github.com/seschis/concord/internal/transcript"
-	"github.com/seschis/concord/internal/triage"
-	"github.com/seschis/concord/internal/tui"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/engine"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/ingest"
+	iprog "github.com/seschis/harmonia/internal/progress"
+	"github.com/seschis/harmonia/internal/provider"
+	"github.com/seschis/harmonia/internal/report"
+	"github.com/seschis/harmonia/internal/transcript"
+	"github.com/seschis/harmonia/internal/triage"
+	"github.com/seschis/harmonia/internal/tui"
 )
 
 type config struct {
-	// Model config layers: concord.toml (discovered or --config), one-shot
+	// Model config layers: harmonia.toml (discovered or --config), one-shot
 	// --add-model specs, and per-name skips. Precedence per field: flag > file
 	// > preset.
 	configFile string
@@ -97,7 +97,7 @@ func main() {
 // Tests use it to parse flag matrices without running a triage.
 func newRootCmd(cfg *config) *cobra.Command {
 	root := &cobra.Command{
-		Use:          "concord [flags] INPUT_FILE",
+		Use:          "harmonia [flags] INPUT_FILE",
 		Short:        "Experimental multi-model security finding triage",
 		Version:      version,
 		Args:         cobra.ExactArgs(1),
@@ -117,9 +117,9 @@ func newRootCmd(cfg *config) *cobra.Command {
 	f.StringVar(&cfg.claudeEndpoint, "claude-endpoint", "", "Anthropic-compatible endpoint URL (else the official API)")
 	f.StringVar(&cfg.openaiEndpoint, "openai-endpoint", "", "OpenAI-compatible endpoint root including /v1 (else the protocol default)")
 
-	// Model config layers: a standing concord.toml plus one-shot specs.
+	// Model config layers: a standing harmonia.toml plus one-shot specs.
 	f.StringVar(&cfg.configFile, "config", "",
-		"model config file (concord.toml with [[models]] entries); discovered automatically when unset: concord.toml in the working directory, then the input file's directory")
+		"model config file (harmonia.toml with [[models]] entries); discovered automatically when unset: harmonia.toml in the working directory, then the input file's directory")
 	f.StringArrayVar(&cfg.addModels, "add-model", nil,
 		"one-shot model spec 'name,key=value,...' (repeatable; per-field precedence flag > file > preset). Keys: name, protocol, endpoint, api_key, model, context_window, price_in, price_out, bedrock, region, api_version")
 	f.StringArrayVar(&cfg.noModels, "no-model", nil, "skip a model by name (repeatable)")
@@ -395,7 +395,7 @@ func run(ctx context.Context, cfg *config, input string) error {
 }
 
 // discoverConfigFile resolves the model config file: an explicit --config wins,
-// then concord.toml in the working directory, then concord.toml in the input
+// then harmonia.toml in the working directory, then harmonia.toml in the input
 // file's directory. It returns "" for a presets-only run and an error when
 // --config points at a missing or unreadable file.
 func discoverConfigFile(cfg *config, input string) (string, error) {
@@ -405,11 +405,11 @@ func discoverConfigFile(cfg *config, input string) (string, error) {
 		}
 		return cfg.configFile, nil
 	}
-	if isRegularFile("concord.toml") {
-		return "concord.toml", nil
+	if isRegularFile("harmonia.toml") {
+		return "harmonia.toml", nil
 	}
 	if dir := filepath.Dir(input); dir != "." && dir != "" {
-		if p := filepath.Join(dir, "concord.toml"); isRegularFile(p) {
+		if p := filepath.Join(dir, "harmonia.toml"); isRegularFile(p) {
 			return p, nil
 		}
 	}
@@ -494,7 +494,7 @@ func presetSpecs(cfg *config) []provider.ModelSpec {
 }
 
 // resolveSpecs builds the voter set from the config layers: preset specs from
-// flags/env, the discovered concord.toml, and one-shot --add-model specs. The
+// flags/env, the discovered harmonia.toml, and one-shot --add-model specs. The
 // layers merge per field (flag > file > preset), the result validates, then
 // every resolvable spec constructs through NewFromSpec in
 // preset-then-declaration order, skipping the rest with a reason. voters[0] is

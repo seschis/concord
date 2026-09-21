@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/seschis/concord/internal/finding"
+	"github.com/seschis/harmonia/internal/finding"
 )
 
 // parseXLSX reads the first worksheet, treating the first row as a header and

@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 func rs(verdicts ...triage.Verdict) []triage.Result {

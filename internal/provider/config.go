@@ -9,10 +9,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
-// modelTable is one [[models]] entry of concord.toml. Every field is optional
+// modelTable is one [[models]] entry of harmonia.toml. Every field is optional
 // at decode time; a spec's final values only exist after the preset/file/flag
 // merge, so field-level rules are enforced by ValidateSpecs on the merged set.
 type modelTable struct {
@@ -33,7 +33,7 @@ type modelConfig struct {
 	Models []modelTable `toml:"models"`
 }
 
-// LoadTOML reads a concord.toml model config. Decoding is strict: any unknown
+// LoadTOML reads a harmonia.toml model config. Decoding is strict: any unknown
 // key (top level or inside a [[models]] table) is an error, so typos fail at
 // load instead of silently vanishing. A duplicate name within one file is an
 // error (typos deserve failure, not last-wins); repeated names ACROSS layers

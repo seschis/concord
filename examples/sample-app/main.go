@@ -1,5 +1,5 @@
 // Command sample-app is a tiny HTTP service used as the demo target for
-// concord. It deliberately contains one real vulnerability (command
+// harmonia. It deliberately contains one real vulnerability (command
 // injection) and one mitigated one (validated SQL interpolation) so a
 // triage run has something to vote on. It is not intended for production.
 package main

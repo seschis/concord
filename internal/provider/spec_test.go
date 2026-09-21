@@ -10,7 +10,7 @@ func clearCredentialEnvs(t *testing.T) {
 	for _, env := range []string{
 		"OPENAI_API_KEY", "AZURE_OPENAI_API_KEY", "GOOGLE_API_KEY",
 		"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE",
-		"AWS_REGION", "AWS_DEFAULT_REGION", "CONCORD_TEST_KEY",
+		"AWS_REGION", "AWS_DEFAULT_REGION", "HARMONIA_TEST_KEY",
 	} {
 		t.Setenv(env, "")
 	}
@@ -57,19 +57,19 @@ func TestPresetSpecs(t *testing.T) {
 
 func TestModelSpecResolveKey(t *testing.T) {
 	clearCredentialEnvs(t)
-	t.Setenv("CONCORD_TEST_KEY", "from-env")
+	t.Setenv("HARMONIA_TEST_KEY", "from-env")
 
 	// A literal key wins over everything.
 	if got := resolveKey(ModelSpec{Protocol: ProtocolOpenAI, APIKey: "literal"}); got != "literal" {
 		t.Errorf("literal key = %q, want %q", got, "literal")
 	}
 	// An env: reference resolves the named variable.
-	if got := resolveKey(ModelSpec{Protocol: ProtocolOpenAI, APIKey: "env:CONCORD_TEST_KEY"}); got != "from-env" {
+	if got := resolveKey(ModelSpec{Protocol: ProtocolOpenAI, APIKey: "env:HARMONIA_TEST_KEY"}); got != "from-env" {
 		t.Errorf("env: reference = %q, want %q", got, "from-env")
 	}
 	// An unset env: reference falls through to the protocol default.
 	t.Setenv("OPENAI_API_KEY", "openai-default")
-	if got := resolveKey(ModelSpec{Protocol: ProtocolOpenAI, APIKey: "env:CONCORD_TEST_UNSET"}); got != "openai-default" {
+	if got := resolveKey(ModelSpec{Protocol: ProtocolOpenAI, APIKey: "env:HARMONIA_TEST_UNSET"}); got != "openai-default" {
 		t.Errorf("unset env: reference = %q, want the protocol default", got)
 	}
 	// An empty key resolves the protocol's default credential env var.

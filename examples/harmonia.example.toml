@@ -1,4 +1,4 @@
-# concord.toml — model config for concord.
+# harmonia.toml — model config for harmonia.
 #
 # [[models]] entries extend or override the built-in presets (claude, gemini,
 # openai, azure). Fields merge per model name with precedence flag > file >
@@ -6,7 +6,7 @@
 # strict: an unknown key is an error, and a name repeated within this file is
 # an error (repeated --add-model for the same name is last-wins).
 #
-# The file is discovered automatically when --config is unset: concord.toml in
+# The file is discovered automatically when --config is unset: harmonia.toml in
 # the working directory, then the input file's directory.
 
 # A local vLLM server speaking the OpenAI API. context_window is required for
@@ -42,7 +42,7 @@ context_window = 262144
 # region = "us-east-1"
 
 # One-shot equivalent of the vLLM entry above, from the command line:
-#   concord --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" findings.sarif
+#   harmonia --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" findings.sarif
 
 # Names must match [a-z0-9-]. The judge/analyst persona names are reserved and
 # rejected at load: adjudicator, strict, business, codeflow.

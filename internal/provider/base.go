@@ -6,10 +6,10 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/progress"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/progress"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 const explorerMaxTokens = 4000

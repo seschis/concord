@@ -3,7 +3,7 @@
 // finding; nothing imports it, so there is no cycle.
 package engine
 
-import "github.com/seschis/concord/internal/triage"
+import "github.com/seschis/harmonia/internal/triage"
 
 // conservativeOrder ranks verdicts from most to least "real". The most
 // conservative agreed verdict is the lowest-ranked one.

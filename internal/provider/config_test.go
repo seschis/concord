@@ -9,7 +9,7 @@ import (
 
 func writeTOML(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "concord.toml")
+	path := filepath.Join(t.TempDir(), "harmonia.toml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}

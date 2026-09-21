@@ -1,13 +1,13 @@
-# concord — Design
+# harmonia — Design
 
 Status: implemented. Phases 1 through 5 of the phased plan (section 13) are
 complete; the remaining items are in section 14.
 
-Module path, `github.com/seschis/concord`.
+Module path, `github.com/seschis/harmonia`.
 
 ## 1. What this is
 
-`concord` is a Go tool for triaging security scanner findings. It reads
+`harmonia` is a Go tool for triaging security scanner findings. It reads
 scanner findings, optionally reads the source code they point at, asks four
 LLMs to judge each finding, takes a majority vote, and adjudicates ties with a
 single model. It reads and writes only local files.
@@ -26,7 +26,7 @@ and no usage reporting to any external service.
   joining the vote from config.
 - Accept SARIF, JSON, CSV, Markdown, and XLSX as input.
 - Produce a Markdown report and a JSON results file, the latter carrying a
-  `concordAnalysis` block per finding.
+  `harmoniaAnalysis` block per finding.
 - Offer two context strategies behind one interface, selectable on the command
   line, with shared-context as the default.
 - Ship via goreleaser to GitHub releases.
@@ -36,7 +36,7 @@ and no usage reporting to any external service.
 - No backend connections or concepts. No LLM proxy, no usage reporting, no
   server-side triage cache, no fingerprint lookups.
 - No OpenTelemetry, no OpenLIT, no external telemetry of any kind.
-- No enhanced-SARIF output. The tool does not write `concordAnalysis` back
+- No enhanced-SARIF output. The tool does not write `harmoniaAnalysis` back
   into SARIF result properties. That data rides inside the JSON report
   instead.
 
@@ -52,7 +52,7 @@ and no usage reporting to any external service.
   tool loop, single-shot, and adjudicate paths are provider-agnostic. This
   adapter is what makes prompt caching and per-model thinking translation
    possible; langchaingo's `llms/anthropic` and `llms/bedrock` are no longer used.
-- `github.com/BurntSushi/toml` for the `concord.toml` model config
+- `github.com/BurntSushi/toml` for the `harmonia.toml` model config
   (provider package only, strict-decoded).
 - `github.com/spf13/cobra` for the CLI.
 - `github.com/xuri/excelize/v2` for XLSX ingest.
@@ -85,8 +85,8 @@ not block the project.
 ## 4. Repository layout
 
 ```
-concord/
-  cmd/concord/main.go             # cobra CLI entrypoint
+harmonia/
+  cmd/harmonia/main.go             # cobra CLI entrypoint
   internal/
     finding/finding.go            # normalized Finding shape
     ingest/
@@ -96,7 +96,7 @@ concord/
       provider.go                 # Provider interface, AnalyzeInput
       base.go                     # LLMProvider base: single-shot/agentic/gather/adjudicate
       spec.go                     # ModelSpec, the 4 presets, NewFromSpec protocol factory
-      config.go                   # concord.toml: strict load, per-field merge, validation
+      config.go                   # harmonia.toml: strict load, per-field merge, validation
       anthropic_native.go         # anthropic-sdk-go adapter: caching + thinking translation
       pricing.go                  # per-1M token cost tables (cache-aware) + cost()
     agent/
@@ -111,7 +111,7 @@ concord/
       vote.go adjudicate.go       # majority vote + Claude adjudication
       analysis.go                 # Result, verdict categories, mapping to classification
     report/
-      markdown.go json.go         # outputs + concordAnalysis block
+      markdown.go json.go         # outputs + harmoniaAnalysis block
   .goreleaser.yaml
   .github/workflows/release.yml
   go.mod
@@ -174,7 +174,7 @@ proxy servers (a vLLM server for openai is the usual case); gemini and azure
 are preset-only.
 
 Config layers merge per model name with precedence flag > file > preset: the
-preset specs (CLI flags and env), the `concord.toml` discovered in the working
+preset specs (CLI flags and env), the `harmonia.toml` discovered in the working
 directory or the input file's directory (or `--config`), and the one-shot
 `--add-model "name,key=value,..."` flags. Decoding is strict (an unknown key
 or a duplicate name in one file is an error), and the merged set validates:
@@ -412,14 +412,14 @@ Five input formats. `detect.go` dispatches on extension and content.
 
 Two artifacts, a Markdown report with the full per-model analysis and cost
 rollup, and a JSON results file. Each finding in the JSON also carries a
-`concordAnalysis` object, derived from the vote.
+`harmoniaAnalysis` object, derived from the vote.
 
 ```jsonc
 {
   "id": "F1", "file": "...", "final_verdict": "LIKELY_REAL",
   "claude": {}, "gemini": {}, "openai": {}, "azure": {},
   "agreement": "majority",
-  "concordAnalysis": {
+  "harmoniaAnalysis": {
     "classification": "TRUE_POSITIVE",
     "justification": "<final reasoning>",
     "workDetail": "<condensed agent trace / deciding factor>",
@@ -465,7 +465,7 @@ goreleaser to GitHub releases.
   validates the version, creates and pushes the tag, and runs
   `goreleaser release --clean`.
 - Users download the binary directly from the releases page, or build from
-  source with `go build ./cmd/concord`.
+  source with `go build ./cmd/harmonia`.
 
 ## 13. Phased plan
 
@@ -476,7 +476,7 @@ goreleaser to GitHub releases.
 3. The other three providers, the `Strategy` interface with both strategies,
    the vote, and adjudication.
 4. Remaining ingest formats (CSV, Markdown, XLSX), the Markdown report, and the
-   `concordAnalysis` block.
+   `harmoniaAnalysis` block.
 5. goreleaser and CI. Then confirm or defer the advanced provider knobs from
    section 3.
 

@@ -19,7 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	prog "github.com/seschis/concord/internal/progress"
+	prog "github.com/seschis/harmonia/internal/progress"
 )
 
 // Header is the static run description shown at the top.
@@ -298,7 +298,7 @@ func (m *Model) View() string {
 	var b strings.Builder
 
 	models := strings.Join(m.header.Models, ", ")
-	b.WriteString(headerStyle.Render("concord") + dimStyle.Render(
+	b.WriteString(headerStyle.Render("harmonia") + dimStyle.Render(
 		fmt.Sprintf("  %s · %s · effort=%s", short(m.header.InputFile), m.header.Strategy, m.header.Effort)) + "\n")
 	b.WriteString(dimStyle.Render("models: "+models) + "\n")
 	if len(m.header.Unpriced) > 0 {

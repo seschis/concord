@@ -6,9 +6,9 @@ package provider
 import (
 	"context"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // ToolEnv describes the sandboxed directories the agentic loop may read: the

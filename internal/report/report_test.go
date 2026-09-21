@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seschis/concord/internal/finding"
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/finding"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 func sampleRow() FindingResult {
@@ -20,15 +20,15 @@ func sampleRow() FindingResult {
 	return NewFindingResult(f, results, triage.LikelyReal, "majority", nil, 0, "")
 }
 
-func TestConcordAnalysisMapping(t *testing.T) {
+func TestHarmoniaAnalysisMapping(t *testing.T) {
 	row := sampleRow()
-	if row.ConcordAnalysis.Classification != "TRUE_POSITIVE" {
-		t.Fatalf("LIKELY_REAL should map to TRUE_POSITIVE, got %s", row.ConcordAnalysis.Classification)
+	if row.HarmoniaAnalysis.Classification != "TRUE_POSITIVE" {
+		t.Fatalf("LIKELY_REAL should map to TRUE_POSITIVE, got %s", row.HarmoniaAnalysis.Classification)
 	}
-	if row.ConcordAnalysis.SchemaVersion != "1.0.0" {
+	if row.HarmoniaAnalysis.SchemaVersion != "1.0.0" {
 		t.Fatalf("missing schema version")
 	}
-	if row.ConcordAnalysis.Justification == "" {
+	if row.HarmoniaAnalysis.Justification == "" {
 		t.Fatalf("justification should fall back to a model summary")
 	}
 }
@@ -42,11 +42,11 @@ func TestAdjudicationDrivesClassification(t *testing.T) {
 	adj := &triage.AdjudicationResult{FinalVerdict: triage.NotExploitable, Reasoning: "framework auto-escapes", KeyDecidingFactor: "template autoescape"}
 	adjudications := []triage.AdjudicationResult{*adj}
 	row := NewFindingResult(f, results, triage.NotExploitable, "none", adjudications, 0, "")
-	if row.ConcordAnalysis.Classification != "FALSE_POSITIVE" {
-		t.Fatalf("want FALSE_POSITIVE, got %s", row.ConcordAnalysis.Classification)
+	if row.HarmoniaAnalysis.Classification != "FALSE_POSITIVE" {
+		t.Fatalf("want FALSE_POSITIVE, got %s", row.HarmoniaAnalysis.Classification)
 	}
-	if row.ConcordAnalysis.Justification != "framework auto-escapes" {
-		t.Fatalf("justification should come from adjudication, got %q", row.ConcordAnalysis.Justification)
+	if row.HarmoniaAnalysis.Justification != "framework auto-escapes" {
+		t.Fatalf("justification should come from adjudication, got %q", row.HarmoniaAnalysis.Justification)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestAdjudicationsPanelRecorded(t *testing.T) {
 	if len(row.Adjudications) != 2 {
 		t.Fatalf("want 2 adjudications recorded, got %d", len(row.Adjudications))
 	}
-	if row.ConcordAnalysis.Justification != "strict says no taint" {
-		t.Fatalf("justification should come from the judge matching the final verdict, got %q", row.ConcordAnalysis.Justification)
+	if row.HarmoniaAnalysis.Justification != "strict says no taint" {
+		t.Fatalf("justification should come from the judge matching the final verdict, got %q", row.HarmoniaAnalysis.Justification)
 	}
 	b, err := json.Marshal(row)
 	if err != nil {
@@ -207,8 +207,8 @@ func TestWriteJSONAndMarkdown(t *testing.T) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatalf("results.json is not valid JSON: %v", err)
 	}
-	if !strings.Contains(string(raw), "concordAnalysis") {
-		t.Fatalf("results.json missing concordAnalysis")
+	if !strings.Contains(string(raw), "harmoniaAnalysis") {
+		t.Fatalf("results.json missing harmoniaAnalysis")
 	}
 
 	mp, err := WriteMarkdown(dir, meta, rows)

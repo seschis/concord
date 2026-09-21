@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/seschis/concord/internal/bundle"
+	"github.com/seschis/harmonia/internal/bundle"
 )
 
 // Status colors for export output. lipgloss auto-degrades to no color when
@@ -169,7 +169,7 @@ Pass --deep-clone to fetch full history.`,
 				}
 			}
 
-			fmt.Println("\nDone. Use --context-dir", output, "when running concord.")
+			fmt.Println("\nDone. Use --context-dir", output, "when running harmonia.")
 			return nil
 		},
 	}

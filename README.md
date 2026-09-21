@@ -1,15 +1,15 @@
-# concord
+# harmonia
 
 <p align="center">
   <img src="assets/robot-judges.png" alt="A panel of robot judges weighing in on triaged security findings" width="900">
 </p>
 
 ![Go](https://img.shields.io/badge/go-1.27%2B-00ADD8)
-![CI](https://github.com/seschis/concord/workflows/ci/badge.svg)
-![Release](https://img.shields.io/github/v/release/seschis/concord)
+![CI](https://github.com/seschis/harmonia/workflows/ci/badge.svg)
+![Release](https://img.shields.io/github/v/release/seschis/harmonia)
 ![License](https://img.shields.io/badge/License-Apache--2.0-blue)
 
-`concord` is a Go CLI that triages security scanner findings with multiple LLMs.
+`harmonia` is a Go CLI that triages security scanner findings with multiple LLMs.
 It ingests scanner output (SARIF, JSON, CSV, Markdown, XLSX), lets the models
 read the flagged source with sandboxed file tools, asks up to four models to
 judge each finding independently, takes a majority vote, and breaks ties with a
@@ -38,7 +38,7 @@ flowchart TD
 ## Why multi-model voting
 
 A single model's verdict on a finding is unstable: it depends on the model, the
-prompt, and the order in which evidence was read. `concord` treats triage as an
+prompt, and the order in which evidence was read. `harmonia` treats triage as an
 ensemble problem instead:
 
 - Up to four preset models (Claude, Gemini, OpenAI, Azure OpenAI) judge each
@@ -73,12 +73,12 @@ ensemble problem instead:
 - Live cost accounting: every model call is priced and the total accrues on
   screen as the run proceeds.
 - Inputs, SARIF, JSON, CSV, Markdown, XLSX.
-- Outputs, `results.json` (with a `concordAnalysis` block per finding) and
+- Outputs, `results.json` (with a `harmoniaAnalysis` block per finding) and
   a human-readable `report.md`.
 
 ## How a run looks
 
-![concord live TUI](assets/demo.gif)
+![harmonia live TUI](assets/demo.gif)
 
 The same run writes a `report.md` with the per-model verdicts, reasoning, and
 cost breakdown. A trimmed excerpt from the demo run:
@@ -186,37 +186,37 @@ Homebrew:
 
 ```bash
 brew tap seschis/tap
-brew install concord
+brew install harmonia
 ```
 
-Or download a prebuilt binary from the [releases page](https://github.com/seschis/concord/releases).
+Or download a prebuilt binary from the [releases page](https://github.com/seschis/harmonia/releases).
 
 Or build from source (Go 1.27+):
 
 ```bash
-go build -o concord ./cmd/concord
+go build -o harmonia ./cmd/harmonia
 ```
 
 ## Usage
 
 ```bash
 # Metadata-only, whichever models have credentials
-concord -o ./out findings.sarif
+harmonia -o ./out findings.sarif
 
 # Shared-context (default): one explorer reads the repo, all voters share the brief
-concord --srcroot /path/to/repo -o ./out findings.sarif
+harmonia --srcroot /path/to/repo -o ./out findings.sarif
 
 # Per-model: each model crawls the repo itself
-concord --srcroot /path/to/repo --context-strategy per-model -o ./out findings.sarif
+harmonia --srcroot /path/to/repo --context-strategy per-model -o ./out findings.sarif
 
 # Parse and normalize findings only, no model calls
-concord --dry-run findings.csv
+harmonia --dry-run findings.csv
 
 # The built-in demo: two findings against examples/sample-app, with analyst lenses
-concord --analyst strict --analyst business --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif
+harmonia --analyst strict --analyst business --srcroot examples/sample-app -o ./demo-out --effort low examples/findings.sarif
 ```
 
-Run `concord --help` for all flags.
+Run `harmonia --help` for all flags.
 
 ## Breaking ties (`--judge`)
 
@@ -234,13 +234,13 @@ the voters.
 
 ```bash
 # Three personas, all on the default (preferred) model
-concord --judge strict --judge business --judge codeflow -o ./out findings.sarif
+harmonia --judge strict --judge business --judge codeflow -o ./out findings.sarif
 
 # Mix models: business review on Gemini, the rest on the default
-concord --judge strict --judge business --judge-model business=gemini -o ./out findings.sarif
+harmonia --judge strict --judge business --judge-model business=gemini -o ./out findings.sarif
 
 # A custom persona from a file
-concord --judge skeptic=./personas/skeptic.md -o ./out findings.sarif
+harmonia --judge skeptic=./personas/skeptic.md -o ./out findings.sarif
 ```
 
 With no `--judge` flags the panel is a single `adjudicator` judge (the legacy
@@ -248,7 +248,7 @@ adjudication prompt), so default behavior is unchanged.
 
 ## Getting an ensemble from one model (`--analyst`)
 
-The whole value of `concord` is the ensemble, but the cross-model vote only kicks
+The whole value of `harmonia` is the ensemble, but the cross-model vote only kicks
 in with two or more providers. If you have credentials for a single LLM, the vote
 degenerates to one verdict (no tie, so the judge panel never fires). `--analyst`
 fixes that: it adds **analyzer lenses** — the same personas as judges — that vote
@@ -265,13 +265,13 @@ analyst. Built-in lenses are `strict`, `business`, and `codeflow`; pass
 
 ```bash
 # Three lenses on your single model: a real 4-way vote (1 model + 3 analysts)
-concord --analyst strict --analyst business --analyst codeflow -o ./out findings.sarif
+harmonia --analyst strict --analyst business --analyst codeflow -o ./out findings.sarif
 
 # Lenses plus a judge panel, so a single-model run uses the full machinery
-concord --analyst strict --analyst business --judge strict --judge codeflow -o ./out findings.sarif
+harmonia --analyst strict --analyst business --judge strict --judge codeflow -o ./out findings.sarif
 
 # A custom lens from a file
-concord --analyst paranoid=./personas/paranoid.md -o ./out findings.sarif
+harmonia --analyst paranoid=./personas/paranoid.md -o ./out findings.sarif
 ```
 
 With no `--analyst` flags the behavior is exactly as before (one voter per model).
@@ -293,7 +293,7 @@ do not read everything up front, they get a short inventory of what exists and
 open files on demand, so adding a large context set is cheap.
 
 ```bash
-concord --srcroot /path/to/app \
+harmonia --srcroot /path/to/app \
   --context-dir /path/to/api-gateway \
   --context-dir /path/to/auth-service \
   -o ./out findings.sarif
@@ -309,7 +309,7 @@ services, and policies live.
 
 Assembling that set of repos and docs by hand on every machine is the tedious
 part, especially in CI or for a teammate who does not have all the repos cloned.
-`concord context export` and `context import` move a whole context directory
+`harmonia context export` and `context import` move a whole context directory
 around as a single `.tar.gz`.
 
 Export scans a context directory one level deep. For each git repo it records
@@ -320,7 +320,7 @@ re-cloned, and hidden directories are ignored so caches and stray VCS metadata
 never leak in. Every repo and file is listed as it is processed.
 
 ```bash
-concord context export --context-dir ./context -o context-bundle.tar.gz
+harmonia context export --context-dir ./context -o context-bundle.tar.gz
 ```
 
 Import re-clones each recorded repo (shallow and pinned to the manifest's commit
@@ -329,7 +329,7 @@ restores the loose files, reproducing the same layout. A repo that fails to clon
 (permissions, network) becomes a warning instead of aborting the import.
 
 ```bash
-concord context import context-bundle.tar.gz -o ./context
+harmonia context import context-bundle.tar.gz -o ./context
 ```
 
 Then point `--context-dir` at the restored directory (or its subdirectories) for
@@ -370,11 +370,11 @@ factory, so any model that speaks the **openai** or **anthropic** wire
 protocol (local vLLM servers are the usual case) can vote alongside the
 presets with no code change. `gemini` and `azure` are preset-only.
 
-Define a model in a standing `concord.toml`, or one-shot with `--add-model`.
+Define a model in a standing `harmonia.toml`, or one-shot with `--add-model`.
 
-### concord.toml
+### harmonia.toml
 
-Concord looks for `concord.toml` in the working directory, then the input
+Harmonia looks for `harmonia.toml` in the working directory, then the input
 file's directory, unless `--config` points at one:
 
 ```toml
@@ -387,7 +387,7 @@ context_window = 262144
 ```
 
 A commented example covering the other keys lives in
-[examples/concord.example.toml](examples/concord.example.toml). Rules:
+[examples/harmonia.example.toml](examples/harmonia.example.toml). Rules:
 
 - `name` must match `[a-z0-9-]`; the judge/analyst persona names
   `adjudicator`, `strict`, `business`, and `codeflow` are reserved and
@@ -406,7 +406,7 @@ the file, which overrides the built-in preset.
 The same vLLM model without a file:
 
 ```bash
-concord --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" \
+harmonia --add-model "qwen,protocol=openai,endpoint=http://127.0.0.1:8000/v1,model=Qwen3.8-27B,context_window=262144" \
   -o ./out findings.sarif
 ```
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seschis/concord/internal/triage"
+	"github.com/seschis/harmonia/internal/triage"
 )
 
 // NewAnalyst must inherit the base provider's model and pricing while taking a

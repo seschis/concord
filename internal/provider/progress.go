@@ -6,9 +6,9 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/seschis/concord/internal/agent"
-	"github.com/seschis/concord/internal/progress"
-	"github.com/seschis/concord/internal/transcript"
+	"github.com/seschis/harmonia/internal/agent"
+	"github.com/seschis/harmonia/internal/progress"
+	"github.com/seschis/harmonia/internal/transcript"
 )
 
 // stepReporter builds an agent.StepFunc that emits a progress.Action for each
