@@ -284,8 +284,11 @@ swallowed — it must never break a triage run.
   pass offline (no network, no API keys). Live model paths are only reachable
   with credentials, so cover logic (vote, parse, ingest, tools, collapse) with
   unit tests, not live calls.
-- goreleaser publishes plain GitHub release binaries (darwin/linux, amd64/arm64)
-  via `release --clean`. No Homebrew tap, no custom download strategy.
+- goreleaser publishes GitHub release binaries (darwin/linux, amd64/arm64)
+  via `release --clean` and pushes the generated formula to the
+  `seschis/homebrew-tap` tap (default `Formula/` dir) using the
+  `HOMEBREW_TAP_TOKEN` repo secret (a PAT with write access to the tap);
+  no custom download strategy.
 - End commit messages with the Co-Authored-By trailer used across this repo.
 
 ## Status

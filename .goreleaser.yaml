@@ -33,3 +33,14 @@ release:
   github:
     owner: seschis
     name: concord
+
+brews:
+  - name: concord
+    repository:
+      owner: seschis
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/seschis/concord"
+    description: "A Go CLI that triages security scanner findings with multiple LLMs."
+    license: "Apache-2.0"

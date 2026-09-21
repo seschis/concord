@@ -182,7 +182,14 @@ validation is effective and the finding is not exploitable as deployed.
 
 ## Install
 
-Download a prebuilt binary from the [releases page](https://github.com/seschis/concord/releases).
+Homebrew:
+
+```bash
+brew tap seschis/tap
+brew install concord
+```
+
+Or download a prebuilt binary from the [releases page](https://github.com/seschis/concord/releases).
 
 Or build from source (Go 1.27+):
 
