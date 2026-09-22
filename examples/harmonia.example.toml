@@ -22,7 +22,55 @@ context_window = 262144
 # price_in = 0.0           # USD per 1M tokens; set both price fields or neither.
 # price_out = 0.0          # An explicit $0 price is a real price (no unpriced marker).
 
-# Override a preset instead of adding a model (name must match the preset):
+# A hosted OpenAI-API endpoint — OpenRouter. Same openai protocol as the vLLM
+# entry above: the endpoint is the root including /v1, the model id is verbatim
+# from OpenRouter's model list (free variants end in ":free"; pick one that
+# lists "tools" in its supported parameters so the agentic paths work), and the
+# key is required (a hosted endpoint with no key gets a placeholder token the
+# API rejects).
+# [[models]]
+# name = "or-free"
+# protocol = "openai"
+# endpoint = "https://openrouter.ai/api/v1"
+# api_key = "env:OPENROUTER_API_KEY"
+# model = "qwen/qwen3.8-27b:free"
+# context_window = 262144  # the window OpenRouter lists for that id
+# A :free model matches no built-in price table: it costs $0 and carries the
+# (unpriced) marker; set price_in/price_out to 0.0 to declare a real $0 price.
+
+# A local Ollama server (its OpenAI-compatible endpoint). Like the vLLM
+# entry, no api_key is needed: an explicit endpoint with no key anywhere runs
+# on a placeholder token. The model id is the plain Ollama name, and
+# context_window must be what Ollama actually serves for that tag — its
+# default context is often smaller than the model's maximum (the model's
+# ollama.com page lists both).
+# [[models]]
+# name = "ollama"
+# protocol = "openai"
+# endpoint = "http://localhost:11434/v1"
+# model = "qwen3:32b"
+# context_window = 32768
+
+# Override a preset instead of adding a model (name must match the preset).
+# Fields merge per model with precedence flag > file > preset, so pin only
+# what changes: protocol, endpoint, and the preset's 128000 window survive
+# from the preset layer.
+#
+# Hosted OpenAI (the openai preset; active when OPENAI_API_KEY resolves):
+# [[models]]
+# name = "openai"
+# model = "gpt-5.5"                 # preset default when omitted: gpt-5.6-sol
+# api_key = "env:MY_OPENAI_KEY"     # optional; the protocol default env is OPENAI_API_KEY
+#
+# Hosted Anthropic (the claude preset; active when ANTHROPIC_API_KEY,
+# ANTHROPIC_AUTH_TOKEN, or ANTHROPIC_PROFILE resolves — the SDK reads that
+# chain lazily, so nothing needs to be set here for a plain API key):
+# [[models]]
+# name = "claude"
+# model = "claude-sonnet-4-5"       # preset default when omitted: claude-opus-5
+# api_key = "env:MY_ANTHROPIC_KEY"  # optional; literal or env:NAME
+#
+# Gemini (the gemini preset; active when GOOGLE_API_KEY resolves):
 # [[models]]
 # name = "gemini"
 # model = "gemini-2.5-pro"
@@ -35,7 +83,9 @@ context_window = 262144
 # model = "claude-sonnet-5"
 # context_window = 200000
 #
-# Claude through Bedrock:
+# Claude through Bedrock. If the hosted "claude" entry above is also active,
+# give this one a different name (e.g. "claude-br") — names must be unique
+# within the file:
 # [[models]]
 # name = "claude"
 # bedrock = true
