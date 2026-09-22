@@ -181,6 +181,7 @@ func newRootCmd(cfg *config) *cobra.Command {
 		"trim older large tool results from the agentic loop's re-sent context (keeps recent reads, reasoning, and file heads; leaves a re-readable breadcrumb) to cut explorer cost; off by default")
 
 	root.AddCommand(newContextCmd())
+	root.AddCommand(newConfigureCmd())
 	return root
 }
 

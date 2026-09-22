@@ -200,6 +200,9 @@ go build -o harmonia ./cmd/harmonia
 ## Usage
 
 ```bash
+# First time: write a harmonia.toml from your env + opencode/pi provider config
+harmonia configure
+
 # Metadata-only, whichever models have credentials
 harmonia -o ./out findings.sarif
 
@@ -345,14 +348,25 @@ model's minimum cacheable prefix. On the agentic paths,
 `--enable-context-pruning` trims older large tool results from the re-sent
 context to cut explorer cost.
 
-## Credentials
+ ## Credentials
 
-Each model is used only if its credential resolves; unresolvable ones are
-skipped silently, and the banner lists what the run will actually use (the
-voters, the shared-context explorer, the judge panel, and the analyst panel,
-each with its model). At least one model is required — if none resolves, the
-error lists every skip reason.
+ **First-time setup:** `harmonia configure` scans your environment
+ (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`)
+ and the provider settings of the coding agents you already use — opencode
+ (`opencode.json{,c}` in the project or `~/.config/opencode/`) and pi
+ (`~/.pi/agent/models.json` + `auth.json`) — and writes a ready-to-run
+ `harmonia.toml`. Env credentials become `env:` references (the key is never
+ copied); keys found in source configs are written literally unless
+ `--no-secrets` is given (then export lines are printed instead). An existing
+ file is never overwritten without `--force`; `--print` previews instead of
+ writing.
 
+ Each model is used only if its credential resolves; unresolvable ones are
+ skipped silently, and the banner lists what the run will actually use (the
+ voters, the shared-context explorer, the judge panel, and the analyst panel,
+ each with its model). At least one model is required — if none resolves, the
+ error lists every skip reason.
+ 
 - Claude, `ANTHROPIC_API_KEY` (or `--api-key`)
 - Gemini, `GOOGLE_API_KEY` (or `--google-api-key`)
 - OpenAI, `OPENAI_API_KEY` (or `--openai-api-key`)
