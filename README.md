@@ -348,7 +348,10 @@ context to cut explorer cost.
 ## Credentials
 
 Each model is used only if its credential resolves; unresolvable ones are
-skipped with a reason, and at least one model is required.
+skipped silently, and the banner lists what the run will actually use (the
+voters, the shared-context explorer, the judge panel, and the analyst panel,
+each with its model). At least one model is required — if none resolves, the
+error lists every skip reason.
 
 - Claude, `ANTHROPIC_API_KEY` (or `--api-key`)
 - Gemini, `GOOGLE_API_KEY` (or `--google-api-key`)

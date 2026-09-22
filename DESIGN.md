@@ -452,8 +452,10 @@ Resolved per provider from environment variables (and CLI flags).
   resolvable anywhere is still resolvable: the client is constructed with a
   placeholder token, so keyless local servers work.
 
-A model whose credential cannot resolve is skipped with a reason, and the run
-proceeds with the remaining models. At least one model is required.
+A model whose credential cannot resolve is skipped without a line of output (the
+banner lists what the run will use instead), and the run proceeds with the
+remaining models. At least one model is required; if none resolves, the error
+lists every skip reason.
 
 ## 12. Distribution
 

@@ -278,6 +278,8 @@ func run(ctx context.Context, cfg *config, input string) error {
 		return err
 	}
 
+	judgeDisplay := judgeDisplayNames(judges, voters)
+
 	if !useTUI {
 		if configFile != "" {
 			fmt.Printf("Config: %s\n", configFile)
@@ -293,22 +295,22 @@ func run(ctx context.Context, cfg *config, input string) error {
 		case strategy.Name() == "per-model":
 			fmt.Printf("Context: per-model agents reading %s (effort=%s)\n", cfg.srcRoot, cfg.effort)
 		default:
-			fmt.Printf("Context: shared explorer over %s (effort=%s)\n", cfg.srcRoot, cfg.effort)
+			fmt.Printf("Context: shared explorer over %s (%s, effort=%s)\n", cfg.srcRoot, voters[0].Name(), cfg.effort)
 		}
 		if len(contextRoots) > 0 {
 			fmt.Printf("Architecture context: %s\n", strings.Join(contextRootLabels(contextRoots), ", "))
 		}
-		if len(judgeNames) > 1 {
-			fmt.Printf("Judge panel: %s\n", strings.Join(judgeNames, ", "))
+		if len(judgeDisplay) > 1 {
+			fmt.Printf("Judge panel: %s\n", strings.Join(judgeDisplay, ", "))
 		} else {
-			fmt.Printf("Judge: %s\n", judgeNames[0])
+			fmt.Printf("Judge: %s\n", judgeDisplay[0])
 		}
 		if len(analystNames) > 0 {
 			note := ""
 			if strategy.Name() == "per-model" {
 				note = " (per-model: one agentic loop per analyst — shared strategy is cheaper)"
 			}
-			fmt.Printf("Analyst panel: %s%s\n", strings.Join(analystNames, ", "), note)
+			fmt.Printf("Analyst panel: %s (%s)%s\n", strings.Join(analystNames, ", "), voters[0].Name(), note)
 		}
 	}
 
@@ -333,11 +335,22 @@ func run(ctx context.Context, cfg *config, input string) error {
 	var cost float64
 
 	if useTUI {
+		// The run plan the header lists: who gathers the shared context and who
+		// breaks ties, each named by the voter they run on.
+		explorer := ""
+		if cfg.srcRoot != "" && strategy.Name() != "per-model" {
+			explorer = voters[0].Name()
+		}
+		analystModel := ""
+		if len(analystNames) > 0 {
+			analystModel = voters[0].Name()
+		}
 		hdr := tui.Header{
 			InputFile: input, Models: names, Unpriced: report.UnpricedNames(infos),
-			Analysts: analystNames, Strategy: strategy.Name(),
-			SrcRoot: cfg.srcRoot, Effort: cfg.effort,
-			Context: contextRootLabels(contextRoots),
+			Analysts: analystNames, AnalystModel: analystModel,
+			Strategy: strategy.Name(), SrcRoot: cfg.srcRoot, Effort: cfg.effort,
+			Context: contextRootLabels(contextRoots), Explorer: explorer,
+			Judges: judgeDisplay,
 		}
 		outcome := tui.Run(ctx, hdr, func(rctx context.Context, sink iprog.Sink) error {
 			results, cost = eng.TriageAll(iprog.WithSink(rctx, sink), findings, nil)
@@ -497,9 +510,10 @@ func presetSpecs(cfg *config) []provider.ModelSpec {
 // flags/env, the discovered harmonia.toml, and one-shot --add-model specs. The
 // layers merge per field (flag > file > preset), the result validates, then
 // every resolvable spec constructs through NewFromSpec in
-// preset-then-declaration order, skipping the rest with a reason. voters[0] is
-// the preferred model; when no spec resolves it errors listing every skip
-// reason.
+// preset-then-declaration order. Skipped specs leave no line of output — the
+// banner shows what the run will use instead — but their reasons are kept:
+// when no spec resolves the error lists every skip reason. voters[0] is the
+// preferred model.
 func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, error) {
 	var fileSpecs []provider.ModelSpec
 	if configFile != "" {
@@ -557,16 +571,12 @@ func resolveSpecs(cfg *config, configFile string) ([]provider.Provider, error) {
 			continue
 		}
 		if ok, reason := spec.Resolvable(); !ok {
-			line := fmt.Sprintf("%s: %s", spec.Name, reason)
-			fmt.Printf("  skipping %s\n", line)
-			skipReasons = append(skipReasons, line)
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: %s", spec.Name, reason))
 			continue
 		}
 		p, err := provider.NewFromSpec(spec, cfg.maxTokens)
 		if err != nil {
-			line := fmt.Sprintf("%s: %s", spec.Name, short(err.Error()))
-			fmt.Printf("  skipping %s\n", line)
-			skipReasons = append(skipReasons, line)
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: %s", spec.Name, short(err.Error())))
 			continue
 		}
 		voters = append(voters, p)
@@ -591,6 +601,25 @@ func modelInfos(voters []provider.Provider) []report.ModelInfo {
 		infos = append(infos, info)
 	}
 	return infos
+}
+
+// judgeDisplayNames renders each judge as "persona (model)" for the banner and
+// the TUI header. The model shows as the voter's name when it matches an
+// active voter, else as the raw model id.
+func judgeDisplayNames(judges []engine.Judge, voters []provider.Provider) []string {
+	modelToName := map[string]string{}
+	for _, v := range voters {
+		modelToName[v.Model()] = v.Name()
+	}
+	out := make([]string, len(judges))
+	for i, j := range judges {
+		if name, ok := modelToName[j.Model()]; ok {
+			out[i] = j.Name() + " (" + name + ")"
+		} else {
+			out[i] = j.Name() + " (" + j.Model() + ")"
+		}
+	}
+	return out
 }
 
 // buildJudges assembles the adjudication panel from the --judge / --judge-model

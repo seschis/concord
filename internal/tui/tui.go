@@ -24,14 +24,17 @@ import (
 
 // Header is the static run description shown at the top.
 type Header struct {
-	InputFile string
-	Models    []string
-	Unpriced  []string // names of voters without a price (marked, costed at $0)
-	Analysts  []string // analyst-panel persona names, if any
-	Strategy  string
-	SrcRoot   string
-	Effort    string
-	Context   []string // labels of extra architecture-context roots, if any
+	InputFile    string
+	Models       []string
+	Unpriced     []string // names of voters without a price (marked, costed at $0)
+	Analysts     []string // analyst-panel persona names, if any
+	AnalystModel string   // the model analysts vote on (the preferred voter), if any
+	Explorer     string   // the model the shared-context explorer runs on, if any
+	Judges       []string // the judge panel as "persona (model)" strings
+	Strategy     string
+	SrcRoot      string
+	Effort       string
+	Context      []string // labels of extra architecture-context roots, if any
 }
 
 // eventMsg wraps a progress.Event as a tea.Msg. doneMsg signals the engine
@@ -304,8 +307,22 @@ func (m *Model) View() string {
 	if len(m.header.Unpriced) > 0 {
 		b.WriteString(dimStyle.Render("unpriced: "+strings.Join(m.header.Unpriced, ", ")+" (no price set; costed at $0)") + "\n")
 	}
+	if m.header.Explorer != "" {
+		b.WriteString(dimStyle.Render("explorer: "+m.header.Explorer) + "\n")
+	}
+	if len(m.header.Judges) > 0 {
+		label := "judges: "
+		if len(m.header.Judges) == 1 {
+			label = "judge: "
+		}
+		b.WriteString(dimStyle.Render(label+strings.Join(m.header.Judges, ", ")) + "\n")
+	}
 	if len(m.header.Analysts) > 0 {
-		b.WriteString(dimStyle.Render("analysts: "+strings.Join(m.header.Analysts, ", ")) + "\n")
+		line := "analysts: " + strings.Join(m.header.Analysts, ", ")
+		if m.header.AnalystModel != "" {
+			line += " (" + m.header.AnalystModel + ")"
+		}
+		b.WriteString(dimStyle.Render(line) + "\n")
 	}
 	if len(m.header.Context) > 0 {
 		b.WriteString(dimStyle.Render("context: "+strings.Join(m.header.Context, ", ")) + "\n")

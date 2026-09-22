@@ -208,6 +208,40 @@ func TestViewAnalystHeader(t *testing.T) {
 	}
 }
 
+// TestViewRunPlanHeader verifies the header lists what each run aspect will
+// use — the explorer's model, the judge panel (persona + model), and the
+// analysts' model — so the display shows the run plan rather than which
+// models are missing.
+func TestViewRunPlanHeader(t *testing.T) {
+	h := Header{
+		InputFile:    "/tmp/findings.sarif",
+		Models:       []string{"qwen (Qwen3.8-27B)", "or-free (nvidia/nemotron-3.5-lightning:free)"},
+		Strategy:     "shared",
+		Explorer:     "qwen",
+		Judges:       []string{"adjudicator (qwen)"},
+		Analysts:     []string{"strict", "business"},
+		AnalystModel: "qwen",
+	}
+	m := NewModel(h, nil, time.Now())
+	m.apply(prog.Event{Kind: prog.RunStart, Total: 1})
+	out := m.View()
+	for _, want := range []string{
+		"explorer: qwen",
+		"judge: adjudicator (qwen)",
+		"analysts: strict, business (qwen)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("View() missing %q:\n%s", want, out)
+		}
+	}
+
+	// A multi-judge panel renders the plural label with one entry per judge.
+	h.Judges = []string{"strict (qwen)", "business (or-free)"}
+	if out := NewModel(h, nil, time.Now()).View(); !strings.Contains(out, "judges: strict (qwen), business (or-free)") {
+		t.Fatalf("View() missing the plural judge line:\n%s", out)
+	}
+}
+
 // TestViewUnpricedHeaderAndCostMarker verifies the header gains an unpriced
 // note line and the cost-total row carries the marker when a model has no
 // price (it contributes $0 to the total).

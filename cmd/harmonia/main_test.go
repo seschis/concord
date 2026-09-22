@@ -121,6 +121,44 @@ func TestBuildJudgesSkipsUnknownAndAppliesModelOverride(t *testing.T) {
 	}
 }
 
+// TestJudgeDisplayNames verifies the banner/TUI rendering of the judge panel:
+// each judge shows as "persona (voter name)", where the model id maps back to
+// the voter that serves it.
+func TestJudgeDisplayNames(t *testing.T) {
+	claude, err := provider.NewFromSpec(claudeSpec("claude-fake"), 100)
+	if err != nil {
+		t.Fatalf("NewFromSpec(claude): %v", err)
+	}
+	openai, err := provider.NewFromSpec(openaiSpec("openai", "sk-test-fake", "gpt-fake"), 100)
+	if err != nil {
+		t.Fatalf("NewFromSpec(openai): %v", err)
+	}
+	voters := []provider.Provider{claude, openai}
+
+	// Default panel: a single adjudicator on the preferred voter.
+	judges, _ := buildJudges(voters, &config{})
+	if got, want := judgeDisplayNames(judges, voters), []string{"adjudicator (claude)"}; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("judgeDisplayNames (default) = %v, want %v", got, want)
+	}
+
+	// Mixed panel: one judge on the default model, one overridden to the
+	// openai voter.
+	judges, _ = buildJudges(voters, &config{
+		judges:      []string{"strict", "business"},
+		judgeModels: []string{"business=openai"},
+	})
+	got := judgeDisplayNames(judges, voters)
+	want := []string{"strict (claude)", "business (openai)"}
+	if len(got) != len(want) {
+		t.Fatalf("judgeDisplayNames = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("judgeDisplayNames[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestBuildAnalysts(t *testing.T) {
 	claude, err := provider.NewFromSpec(claudeSpec("claude-fake"), 100)
 	if err != nil {
