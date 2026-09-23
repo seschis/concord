@@ -51,6 +51,8 @@ type configureOpts struct {
 	force     bool
 	printOnly bool
 	noSecrets bool
+	local     bool
+	global    bool
 	getEnv    func(string) (string, bool)
 	homeDir   string
 	cwd       string
@@ -76,10 +78,13 @@ Sources, in order:
   3. pi — models.json and auth.json in $PI_CODING_AGENT_DIR or
      ~/.pi/agent — custom providers, models, and keys.
 
-The file is written to ./harmonia.toml (or --output) and is never
-overwritten without --force. Literal API keys found in source configs are
-written into the file; use --no-secrets to omit them and print export
-lines instead.`,
+The file is written to the machine-wide config
+~/.config/harmonia/harmonia.toml by default; --local writes
+./harmonia.toml instead and --output names any path. An existing file is
+never overwritten without --force; if ./harmonia.toml already exists,
+overwrite it with --force or write the machine-wide file with --global.
+Literal API keys found in source configs are written into the file; use
+--no-secrets to omit them and print export lines instead.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if o.getEnv == nil {
@@ -105,18 +110,45 @@ lines instead.`,
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&o.output, "output", "", "path to write (default ./harmonia.toml)")
-	f.BoolVar(&o.force, "force", false, "overwrite an existing harmonia.toml")
+	f.StringVar(&o.output, "output", "", "path to write (default the machine-wide config)")
+	f.BoolVar(&o.force, "force", false, "overwrite an existing config file")
 	f.BoolVarP(&o.printOnly, "print", "p", false, "print the generated file instead of writing it")
 	f.BoolVar(&o.noSecrets, "no-secrets", false, "never write literal API keys; print export lines instead")
+	f.BoolVar(&o.local, "local", false, "write ./harmonia.toml instead of the machine-wide config")
+	f.BoolVar(&o.global, "global", false, "write the machine-wide config even if a local harmonia.toml exists")
 	return cmd
 }
 
-func runConfigure(o configureOpts) error {
-	if o.output == "" {
-		o.output = filepath.Join(o.cwd, "harmonia.toml")
+// configureTarget picks the file to write: --output wins; --local/--global
+// name a tier; otherwise a harmonia.toml already in the cwd must be named
+// explicitly (--force overwrites it, --global targets the machine-wide
+// file), and a missing local file falls back to the machine-wide config.
+func configureTarget(o configureOpts) (string, error) {
+	if o.output != "" {
+		return o.output, nil
 	}
+	local := filepath.Join(o.cwd, "harmonia.toml")
+	switch {
+	case o.local:
+		return local, nil
+	case o.global:
+		return o.globalPath(), nil
+	case o.force && isRegularFile(local):
+		return local, nil
+	case isRegularFile(local):
+		return "", fmt.Errorf("%s already exists — pass --force to overwrite it, or --global to write the machine-wide config", local)
+	default:
+		return o.globalPath(), nil
+	}
+}
 
+// globalPath is the machine-wide config file for this run; homeDir is
+// injected so tests never touch the real home.
+func (o configureOpts) globalPath() string {
+	return filepath.Join(o.homeDir, ".config", "harmonia", "harmonia.toml")
+}
+
+func runConfigure(o configureOpts) error {
 	envModels, envNotes, envVars := detectEnvModels(o.getEnv)
 	ocModels, ocNotes, ocSrc := detectOpencodeModels(o.homeDir, o.cwd, o.getEnv)
 	piModels, piNotes, piSrc := detectPiModels(o.homeDir, o.getEnv)
@@ -161,14 +193,21 @@ func runConfigure(o configureOpts) error {
 		return nil
 	}
 
-	if _, err := os.Stat(o.output); err == nil && !o.force {
-		return fmt.Errorf("%s already exists — pass --force to overwrite, or edit it in place", o.output)
+	target, err := configureTarget(o)
+	if err != nil {
+		return err
 	}
-	if err := os.WriteFile(o.output, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", o.output, err)
+	if _, err := os.Stat(target); err == nil && !o.force {
+		return fmt.Errorf("%s already exists — pass --force to overwrite, or edit it in place", target)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fmt.Errorf("create directory for %s: %w", target, err)
+	}
+	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
 	}
 
-	printConfigureSummary(o.out, o.output, models, envNotes, src, notes, exports, o.noSecrets)
+	printConfigureSummary(o.out, target, models, envNotes, src, notes, exports, o.noSecrets)
 	return nil
 }
 

@@ -348,25 +348,29 @@ model's minimum cacheable prefix. On the agentic paths,
 `--enable-context-pruning` trims older large tool results from the re-sent
 context to cut explorer cost.
 
- ## Credentials
+## Credentials
 
- **First-time setup:** `harmonia configure` scans your environment
- (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`)
- and the provider settings of the coding agents you already use — opencode
- (`opencode.json{,c}` in the project or `~/.config/opencode/`) and pi
- (`~/.pi/agent/models.json` + `auth.json`) — and writes a ready-to-run
- `harmonia.toml`. Env credentials become `env:` references (the key is never
- copied); keys found in source configs are written literally unless
- `--no-secrets` is given (then export lines are printed instead). An existing
- file is never overwritten without `--force`; `--print` previews instead of
- writing.
+**First-time setup:** `harmonia configure` scans your environment
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`)
+and the provider settings of the coding agents you already use — opencode
+(`opencode.json{,c}` in the project or `~/.config/opencode/`) and pi
+(`~/.pi/agent/models.json` + `auth.json`) — and writes a ready-to-run
+`harmonia.toml` to the machine-wide `~/.config/harmonia/harmonia.toml`
+(`--local` writes a project-local `./harmonia.toml` instead; `--output` any
+path). Env credentials become `env:` references (the key is never copied);
+keys found in source configs are written literally unless `--no-secrets` is
+given (then export lines are printed instead). An existing file is never
+overwritten without `--force`; `--print` previews instead of writing. If a
+local `harmonia.toml` already exists in the working directory, the default
+target refuses it — pass `--force` to overwrite the local file or `--global`
+to write the machine-wide one.
 
- Each model is used only if its credential resolves; unresolvable ones are
- skipped silently, and the banner lists what the run will actually use (the
- voters, the shared-context explorer, the judge panel, and the analyst panel,
- each with its model). At least one model is required — if none resolves, the
- error lists every skip reason.
- 
+Each model is used only if its credential resolves; unresolvable ones are
+skipped silently, and the banner lists what the run will actually use (the
+voters, the shared-context explorer, the judge panel, and the analyst panel,
+each with its model). At least one model is required — if none resolves, the
+error lists every skip reason.
+
 - Claude, `ANTHROPIC_API_KEY` (or `--api-key`)
 - Gemini, `GOOGLE_API_KEY` (or `--google-api-key`)
 - OpenAI, `OPENAI_API_KEY` (or `--openai-api-key`)
@@ -392,7 +396,9 @@ Define a model in a standing `harmonia.toml`, or one-shot with `--add-model`.
 ### harmonia.toml
 
 Harmonia looks for `harmonia.toml` in the working directory, then the input
-file's directory, unless `--config` points at one:
+file's directory, then the machine-wide `~/.config/harmonia/harmonia.toml`,
+unless `--config` points at one (a local file always wins over the
+machine-wide one):
 
 ```toml
 [[models]]

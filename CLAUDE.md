@@ -204,8 +204,10 @@ swallowed — it must never break a triage run.
 ## Common changes
 
 - **Add a model via config.** Models are data, not code: a `[[models]]` entry
-  in `harmonia.toml` (discovered in the cwd, then the input file's directory;
-  `--config PATH` wins) or a one-shot `--add-model "name,key=value,..."` flag
+  in `harmonia.toml` (discovered in the cwd, then the input file's directory,
+  then the machine-wide `~/.config/harmonia/harmonia.toml`; `--config PATH`
+  wins; a local file always beats the machine-wide one) or a one-shot
+  `--add-model "name,key=value,..."` flag
   (repeatable). Keys: `protocol`, `endpoint`, `api_key`, `model`,
   `context_window`, `price_in`, `price_out`, `bedrock`, `region`,
   `api_version`. `openai` and `anthropic` accept custom endpoints (the openai
@@ -231,30 +233,34 @@ swallowed — it must never break a triage run.
   `(model, in, out, cacheWrite, cacheRead int)`; non-Claude protocols report
   zero cache tokens, so those terms vanish), and the protocol's resolvability
   predicate in `ModelSpec.Resolvable`. The `LLMProvider` base handles
-   single-shot, agentic, gather, and adjudicate for free.
+  single-shot, agentic, gather, and adjudicate for free.
 
- - **`harmonia configure` (first-run setup).** Generates `harmonia.toml`
-   (`cmd/harmonia/configure.go`) from three sources: credential env vars
-   (written as `env:` references, never literals; a preset-named entry merges
-   with the preset, so it carries only `api_key`), opencode's
-   `opencode.json{,c}` (project cwd, then `~/.config/opencode/`; `npm`
-   `@ai-sdk/openai-compatible` → protocol `openai`, `@ai-sdk/anthropic` →
-   `anthropic`; `options.baseURL` → endpoint; `models.<id>.limit.context` or
-   `contextWindow` → context_window, else 128000 flagged as assumed), and pi's
-   `models.json` + `auth.json` in `$PI_CODING_AGENT_DIR` or `~/.pi/agent`
-   (cost is USD per 1M tokens, same unit as `price_in`/`price_out`; auth.json
-   `key` → literal, `env` record → `env:` reference). Both are JSONC:
-   `stripJSONC` removes `//` and `/* */` comments outside string literals
-   before `json.Unmarshal`. Generated names are `slugName(provider-model)`
-   (sanitized to `[a-z0-9-]`, reserved/preset names get `-custom`, collisions
-   `-2`). Never overwrites without `--force`; `--no-secrets` omits literal
-   keys and prints `export HARMONIA_KEY_*` lines (dashes → underscores);
-   literal keys inside a git repo trigger a .gitignore warning. Tests prove
-   the output round-trips through `provider.LoadTOML` + `MergeSpecs` +
-   `ValidateSpecs`, so configure can never emit a file the run rejects.
+- **`harmonia configure` (first-run setup).** Generates `harmonia.toml`
+  (`cmd/harmonia/configure.go`) from three sources: credential env vars
+  (written as `env:` references, never literals; a preset-named entry merges
+  with the preset, so it carries only `api_key`), opencode's
+  `opencode.json{,c}` (project cwd, then `~/.config/opencode/`; `npm`
+  `@ai-sdk/openai-compatible` → protocol `openai`, `@ai-sdk/anthropic` →
+  `anthropic`; `options.baseURL` → endpoint; `models.<id>.limit.context` or
+  `contextWindow` → context_window, else 128000 flagged as assumed), and pi's
+  `models.json` + `auth.json` in `$PI_CODING_AGENT_DIR` or `~/.pi/agent`
+  (cost is USD per 1M tokens, same unit as `price_in`/`price_out`; auth.json
+  `key` → literal, `env` record → `env:` reference). Both are JSONC:
+  `stripJSONC` removes `//` and `/* */` comments outside string literals
+  before `json.Unmarshal`. Default target is the machine-wide
+  `~/.config/harmonia/harmonia.toml` (`--local` writes `./harmonia.toml`,
+  `--output` any path); a `./harmonia.toml` already in the cwd must be named
+  explicitly — `--force` overwrites it, `--global` targets the machine-wide
+  file. Generated names are `slugName(provider-model)` (sanitized to
+  `[a-z0-9-]`, reserved/preset names get `-custom`, collisions `-2`).
+  `--no-secrets` omits literal keys and prints `export HARMONIA_KEY_*` lines
+  (dashes → underscores); literal keys inside a git repo trigger a
+  .gitignore warning. Tests prove the output round-trips through
+  `provider.LoadTOML` + `MergeSpecs` + `ValidateSpecs`, so configure can
+  never emit a file the run rejects.
 
- - **Add an input format**, add a `parse*` in `internal/ingest` and a case in
-   `ingest.Load`. Map to the normalized `finding.Finding`.
+- **Add an input format**, add a `parse*` in `internal/ingest` and a case in
+  `ingest.Load`. Map to the normalized `finding.Finding`.
 
 - **Verdict to classification** lives in `triage.Classification`
   (REAL -> TRUE_POSITIVE, UNLIKELY/NOT_EXPLOITABLE -> FALSE_POSITIVE,

@@ -190,9 +190,14 @@ func TestConfigureWritesFile(t *testing.T) {
 	if err := runConfigure(o); err != nil {
 		t.Fatalf("runConfigure: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(cwd, "harmonia.toml"))
+	// No local file in the cwd, so the default target is the machine-wide
+	// config under the (injected) home dir.
+	data, err := os.ReadFile(filepath.Join(home, ".config", "harmonia", "harmonia.toml"))
 	if err != nil {
-		t.Fatalf("harmonia.toml not written: %v", err)
+		t.Fatalf("machine-wide harmonia.toml not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, "harmonia.toml")); !os.IsNotExist(err) {
+		t.Error("default run should not create a local harmonia.toml")
 	}
 	s := string(data)
 	for _, want := range []string{
@@ -216,8 +221,61 @@ func TestConfigureRefusesOverwrite(t *testing.T) {
 		getEnv: envOf(map[string]string{"OPENAI_API_KEY": "sk"}),
 		now:    fixedNow, out: &bytes.Buffer{},
 	}
-	if err := runConfigure(o); err == nil {
-		t.Fatal("want an error when the file exists and --force is not set")
+	err := runConfigure(o)
+	if err == nil {
+		t.Fatal("want an error when a local file exists and --force is not set")
+	}
+	if !strings.Contains(err.Error(), "--global") {
+		t.Errorf("error should suggest --global, got: %v", err)
+	}
+}
+
+func TestConfigureLocalFlag(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	o := configureOpts{
+		cwd: cwd, homeDir: home, local: true,
+		getEnv: envOf(map[string]string{"OPENAI_API_KEY": "sk"}),
+		now:    fixedNow, out: &bytes.Buffer{},
+	}
+	if err := runConfigure(o); err != nil {
+		t.Fatalf("runConfigure --local: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(cwd, "harmonia.toml"))
+	if err != nil {
+		t.Fatalf("--local should write ./harmonia.toml: %v", err)
+	}
+	if !strings.Contains(string(data), `name = "openai"`) {
+		t.Errorf("local file missing the openai entry:\n%s", data)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "harmonia", "harmonia.toml")); !os.IsNotExist(err) {
+		t.Error("--local should not write the machine-wide config")
+	}
+}
+
+func TestConfigureGlobalWithLocalPresent(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, "harmonia.toml"), []byte("# local\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o := configureOpts{
+		cwd: cwd, homeDir: home, global: true,
+		getEnv: envOf(map[string]string{"OPENAI_API_KEY": "sk"}),
+		now:    fixedNow, out: &bytes.Buffer{},
+	}
+	if err := runConfigure(o); err != nil {
+		t.Fatalf("runConfigure --global: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".config", "harmonia", "harmonia.toml"))
+	if err != nil {
+		t.Fatalf("--global should write the machine-wide config: %v", err)
+	}
+	if !strings.Contains(string(data), `name = "openai"`) {
+		t.Errorf("machine-wide file missing the openai entry:\n%s", data)
+	}
+	if _, err := os.ReadFile(filepath.Join(cwd, "harmonia.toml")); err != nil {
+		t.Errorf("--global must not touch the local file: %v", err)
 	}
 }
 
@@ -276,9 +334,10 @@ func TestConfigureNoSecretsSummary(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cwd, "opencode.json"), []byte(oc), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	homeDir := t.TempDir()
 	var out bytes.Buffer
 	o := configureOpts{
-		cwd: cwd, homeDir: t.TempDir(), noSecrets: true,
+		cwd: cwd, homeDir: homeDir, noSecrets: true,
 		getEnv: envOf(nil), now: fixedNow, out: &out,
 	}
 	if err := runConfigure(o); err != nil {
@@ -291,7 +350,7 @@ func TestConfigureNoSecretsSummary(t *testing.T) {
 	if strings.Contains(s, "do not commit it") {
 		t.Errorf("no gitignore warning expected under --no-secrets:\n%s", s)
 	}
-	data, _ := os.ReadFile(filepath.Join(cwd, "harmonia.toml"))
+	data, _ := os.ReadFile(filepath.Join(homeDir, ".config", "harmonia", "harmonia.toml"))
 	if strings.Contains(string(data), "sk-test-123") {
 		t.Error("file must not contain the literal key under --no-secrets")
 	}
@@ -431,8 +490,9 @@ func TestConfigureOutputPassesValidation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cwd, "opencode.json"), []byte(oc), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	home := t.TempDir()
 	o := configureOpts{
-		cwd: cwd, homeDir: t.TempDir(),
+		cwd: cwd, homeDir: home,
 		getEnv: envOf(map[string]string{"ANTHROPIC_API_KEY": "sk-ant"}),
 		now:    fixedNow, out: &bytes.Buffer{},
 	}
@@ -440,7 +500,7 @@ func TestConfigureOutputPassesValidation(t *testing.T) {
 		t.Fatalf("runConfigure: %v", err)
 	}
 
-	specs, err := provider.LoadTOML(filepath.Join(cwd, "harmonia.toml"))
+	specs, err := provider.LoadTOML(filepath.Join(home, ".config", "harmonia", "harmonia.toml"))
 	if err != nil {
 		t.Fatalf("LoadTOML on generated file: %v", err)
 	}

@@ -410,8 +410,9 @@ func run(ctx context.Context, cfg *config, input string) error {
 
 // discoverConfigFile resolves the model config file: an explicit --config wins,
 // then harmonia.toml in the working directory, then harmonia.toml in the input
-// file's directory. It returns "" for a presets-only run and an error when
-// --config points at a missing or unreadable file.
+// file's directory, then the machine-wide ~/.config/harmonia/harmonia.toml.
+// It returns "" for a presets-only run and an error when --config points at a
+// missing or unreadable file.
 func discoverConfigFile(cfg *config, input string) (string, error) {
 	if cfg.configFile != "" {
 		if !isRegularFile(cfg.configFile) {
@@ -427,7 +428,20 @@ func discoverConfigFile(cfg *config, input string) (string, error) {
 			return p, nil
 		}
 	}
+	if p := globalConfigPath(); isRegularFile(p) {
+		return p, nil
+	}
 	return "", nil
+}
+
+// globalConfigPath is the machine-wide config file, consulted after the local
+// locations and before falling back to presets only.
+func globalConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "harmonia", "harmonia.toml")
 }
 
 func isRegularFile(path string) bool {

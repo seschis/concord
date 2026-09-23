@@ -293,12 +293,22 @@ func TestDiscoverConfigFile(t *testing.T) {
 		}
 	}
 
-	// An empty cwd so the discovery steps are deterministic.
+	// An empty cwd and a controlled home so the discovery steps are
+	// deterministic.
 	t.Chdir(t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	globalPath := filepath.Join(home, ".config", "harmonia", "harmonia.toml")
 
 	explicit := filepath.Join(t.TempDir(), "explicit.toml")
 	writeFile(t, explicit, "# explicit\n")
 	writeFile(t, "harmonia.toml", "# cwd\n")
+	if err := os.MkdirAll(filepath.Dir(globalPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, globalPath, "# global\n")
+	inDir := t.TempDir()
+	writeFile(t, filepath.Join(inDir, "harmonia.toml"), "# input dir\n")
 
 	// --config wins over cwd.
 	got, err := discoverConfigFile(&config{configFile: explicit}, "findings.sarif")
@@ -317,17 +327,22 @@ func TestDiscoverConfigFile(t *testing.T) {
 		t.Fatalf("cwd harmonia.toml should be found, got %q (%v)", got, err)
 	}
 
-	// Input-dir file found when cwd has none.
+	// Input-dir file found when cwd has none (beats global).
 	os.Remove("harmonia.toml")
-	inDir := t.TempDir()
-	writeFile(t, filepath.Join(inDir, "harmonia.toml"), "# input dir\n")
 	got, err = discoverConfigFile(&config{}, filepath.Join(inDir, "findings.sarif"))
 	if err != nil || got != filepath.Join(inDir, "harmonia.toml") {
 		t.Fatalf("input-dir harmonia.toml should be found, got %q (%v)", got, err)
 	}
 
-	// No file anywhere -> presets only.
+	// Global file found when neither cwd nor input dir has one.
 	empty := t.TempDir()
+	got, err = discoverConfigFile(&config{}, filepath.Join(empty, "findings.sarif"))
+	if err != nil || got != globalPath {
+		t.Fatalf("global harmonia.toml should be the last resort, got %q (%v)", got, err)
+	}
+
+	// No file anywhere -> presets only.
+	os.Remove(globalPath)
 	got, err = discoverConfigFile(&config{}, filepath.Join(empty, "findings.sarif"))
 	if err != nil || got != "" {
 		t.Fatalf("no config file should yield %q (%v)", got, err)
